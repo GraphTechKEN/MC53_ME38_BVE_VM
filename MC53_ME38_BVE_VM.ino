@@ -15,8 +15,7 @@
 //MC53_ME38_BVE_VM_V3   速度計を調整可能にした
 //MC53_ME38_BVE_VM_V3.5 電圧計を電流に応じて動かすようにした
 //MC53_ME38_BVE_VM_V3.6 ブレーキ弁段数を変更できるようにした
-//MC53_ME38_BVE_VM_V3.6.1 電流計を絶対値表示にした、レバーサ不具合修正
-//MC53_ME38_BVE_VM_V3.6.2 ブレーキ角度をPOT_NとPOT_EB間の範囲とした
+//MC53_ME38_BVE_VM_V3.6.1 電流計を絶対値表示にした、レバーサ不具合修正、ブレーキ角度をPOT_NとPOT_EB間の範囲とした
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
