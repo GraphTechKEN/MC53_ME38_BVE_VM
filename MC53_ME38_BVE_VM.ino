@@ -15,6 +15,8 @@
 //MC53_ME38_BVE_VM_V3   速度計を調整可能にした
 //MC53_ME38_BVE_VM_V3.5 電圧計を電流に応じて動かすようにした
 //MC53_ME38_BVE_VM_V3.6 ブレーキ弁段数を変更できるようにした
+//MC53_ME38_BVE_VM_V3.6.1 電流計を絶対値表示にした、レバーサ不具合修正
+//MC53_ME38_BVE_VM_V3.6.2 ブレーキ角度をPOT_NとPOT_EB間の範囲とした
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -867,12 +869,17 @@ void read_Dir(void) {
 //ブレーキ角度読取
 void read_Break(void) {
   uint16_t adc = adcRead(0);
-  uint16_t deg = map(adc, POT_N , POT_EB , 0, brk_full_angl);
+  if(adc < POT_N){
+    adc = POT_N;
+  }else if ( adc > POT_EB){
+    adc = POT_EB;
+  }
+  int16_t deg = map(adc, POT_N , POT_EB , 0, brk_full_angl);
 #ifdef DEBUG
   Serial.print(" Pot1:");
   Serial.print(10000 + adcRead(0));
   Serial.print(" Deg:");
-  Serial.print(1000 + deg);
+  Serial.println(deg);
 #endif
 
   if (deg < ( (float) notch_brk_angl_max / ( notch_brk_num * 2 ))) {
