@@ -1,5 +1,8 @@
-//Adafruit MCP23017 Arduino Library を導入してください
 //Arduino Micro または Leonard を使用してください
+
+//Adafruit MCP23017 Arduino Library を導入してください
+//Adafruit_MCP4725 Arduino Library を導入してください
+
 
 //簡単な説明
 //コマンドに対応しました。デリミタ:CR、Baud:115200、DataBits:8、StopBit:1
@@ -16,6 +19,9 @@
 //MC53_ME38_BVE_VM_V3.5 電圧計を電流に応じて動かすようにした
 //MC53_ME38_BVE_VM_V3.6 ブレーキ弁段数を変更できるようにした
 //MC53_ME38_BVE_VM_V3.6.1 電流計を絶対値表示にした、レバーサ不具合修正、ブレーキ角度をPOT_NとPOT_EB間の範囲とした
+//MC53_ME38_BVE_VM_V3.6.2 Arduino Pin9 に ATS復帰(内房線用)　"Homeキー" 追加
+//MC53_ME38_BVE_VM_V3.6.3 他基板連動対応(Serial1送信対応)
+//MC53_ME38_BVE_VM_V3.6.3.2 他基板からキーボードコマンド受付対応、ATS確認をSpacebar(0x20)に変更、Pin6をEBに
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -82,7 +88,8 @@ String notch_brk_name = "";
 //以下ブレーキ設定値
 uint16_t notch_brk_angl_max = 80;//直通帯の角度
 uint8_t notch_brk_num = 8;//常用ブレーキ段数
-uint16_t brk_full_angl = 165;//緩め位置から非常最大までの全体角度
+uint16_t brk_full_angl =
+  +165;//緩め位置から非常最大までの全体角度
 uint16_t brk_eb_angl = 150;//緩め位置に対して非常位置の角度
 //以上ブレーキ設定値
 //以下速度計補正値
@@ -126,9 +133,11 @@ bool Horn_1_latch = 0;
 bool Horn_2 = 0;
 bool Horn_2_latch = 0;
 bool Ats_Cont = 0;
-bool Ats_Cont_latch = 0;
 bool Ats_Conf = 0;
+bool Ats_Cont_latch = 0;
 bool Ats_Conf_latch = 0;
+bool Ats_Rec = 0;
+bool Ats_Rec_latch = 0;
 bool Panto = 0;
 bool Panto_latch = 0;
 bool Light_Def = 0;
@@ -137,6 +146,8 @@ bool Light_On = 0;
 bool Light_On_latch = 0;
 bool Room_Light = 0;
 bool Room_Light_latch = 0;
+bool EB_SW = 0;
+bool EB_SW_latch = 0;
 float adj_N = 0.0;
 float adj_EB = 0.0;
 
@@ -170,11 +181,20 @@ void setup() {
   pinMode(SS_Brk, OUTPUT); //MCP3008
   pinMode(SS_Mc, OUTPUT); //MCP23S17_MC
 
+  pinMode(5, INPUT_PULLUP); //EBスイッチ
+
   pinMode(8, OUTPUT); //BVE_Door
   digitalWrite(8, 0);
 
+  pinMode(9, INPUT_PULLUP); //ATS
+  pinMode(10, INPUT_PULLUP); //予備
+  pinMode(11, INPUT_PULLUP); //予備SW1
+  pinMode(12, INPUT_PULLUP); //予備SW2
+
   Serial.begin(115200);
   Serial1.begin(115200);
+  Serial.setTimeout(10);
+  Serial1.setTimeout(10);
   dac.begin(0x60);
   dac2.begin(0x61);
   Keyboard.begin();
@@ -222,6 +242,15 @@ void loop() {
   // LOW = pressed, HIGH = not pressed
   //シリアルモニタが止まるのを防止するおまじない
   //BVEモードの時のみシリアル入力を受け付ける
+
+  /*if (Serial1.available() && modeBVE) {
+    String str1 = Serial1.readStringUntil('\r');
+    if (str1 == "KEY:KEY_HOME") {
+      Keyboard.write(0xD2);
+    } else if (str1.startsWith("KEY:")) {
+      Keyboard.print(str1.substring(4));
+    }
+  }*/
   if (Serial.available() && modeBVE) {
     strbve = Serial.readStringUntil('\r');
     //シリアル設定モード
@@ -707,11 +736,15 @@ void loop() {
     digitalWrite(8, !bve_door);
 
     //Serial1デバッグ用
-    Serial1.print("BVE Speed:");
-    Serial1.println(bve_speed);
-    Serial1.print(" Door:");
-    Serial1.println(bve_door);
+    Serial1.print(strbve);
+    Serial1.print("\r");
 
+    /*2022-07-23 解除
+      Serial1.print("BVE Speed:");
+      Serial1.println(bve_speed);
+      Serial1.print(" Door:");
+      Serial1.println(bve_door);
+    */
   }
 
   /*//読み残しは捨てる
@@ -719,7 +752,8 @@ void loop() {
     Serial.readStringUntil('\n');
     }*/
   read_IOexp();         //IOエキスパンダ読込ルーチン
-  read_modeBVE();       //BVEモード読込ルーチン
+  read_Light_Def();     //減光ライト読込ルーチン
+  read_Light();         //前照灯読込ルーチン
   read_MC();            //マスコンノッチ読込ルーチン
   read_Dir();           //マスコンレバーサ読込ルーチン
   read_Break();//ブレーキハンドル読込ルーチン
@@ -727,7 +761,7 @@ void loop() {
   read_Horn();          //ホーンペダル読込ルーチン
   read_Ats();           //ATS確認・警報持続読込ルーチン
   read_Panto();         //強制終了ルーチン
-  read_Light_Def();     //減光ライト読込ルーチン
+  read_EB();            //EBスイッチ読込ルーチン
   keyboard_control();   //キーボード(HID)アウトプットルーチン
 
   delay(10);
@@ -868,18 +902,20 @@ void read_Dir(void) {
 //ブレーキ角度読取
 void read_Break(void) {
   uint16_t adc = adcRead(0);
-  if(adc < POT_N){
+  if (adc < POT_N) {
     adc = POT_N;
-  }else if ( adc > POT_EB){
+  } else if ( adc > POT_EB) {
     adc = POT_EB;
   }
   int16_t deg = map(adc, POT_N , POT_EB , 0, brk_full_angl);
+
 #ifdef DEBUG
   Serial.print(" Pot1:");
   Serial.print(10000 + adcRead(0));
   Serial.print(" Deg:");
   Serial.println(deg);
 #endif
+
 
   if (deg < ( (float) notch_brk_angl_max / ( notch_brk_num * 2 ))) {
     notch_brk = notch_brk_num + 1;
@@ -1177,6 +1213,7 @@ void read_Horn(void) {
 }
 
 void read_Ats(void) {
+  //ATS警報持続
   Ats_Cont = ~ioexp_1_AB & (1 << PIN_ATS_CONT);
   if ( Ats_Cont != Ats_Cont_latch )
   {
@@ -1194,14 +1231,33 @@ void read_Ats(void) {
   }
   Ats_Cont_latch = Ats_Cont;
 
+  //ATS確認
   Ats_Conf = ~ioexp_1_AB & (1 << PIN_ATS_CONF);
   if ( Ats_Conf != Ats_Conf_latch )
   {
     if (Ats_Conf ) {
       if (modeBVE) {
         if (adcRead(1) < 1) {
-          Keyboard.press(0xD2);//"Home"
+          Keyboard.press(0x20);//"Space"
         }
+      }
+    } else {
+      if (modeBVE) {
+        Keyboard.release(0x20);
+      }
+    }
+  }
+  Ats_Conf_latch = Ats_Conf;
+
+  //ATS復帰
+  Ats_Rec = !digitalRead(9);
+  if ( Ats_Rec != Ats_Rec_latch )
+  {
+    if (Ats_Rec ) {
+      if (modeBVE) {
+        //if (adcRead(1) < 1) {
+        Keyboard.press(0xD2);//"Home"
+        //}
       }
     } else {
       if (modeBVE) {
@@ -1209,7 +1265,7 @@ void read_Ats(void) {
       }
     }
   }
-  Ats_Conf_latch = Ats_Conf;
+  Ats_Rec_latch = Ats_Rec;
 }
 
 void read_Panto(void) {
@@ -1232,14 +1288,19 @@ void read_Panto(void) {
 }
 
 void read_Light_Def(void) {
-  if (!modeBVE) {
-    Light_Def = ~ioexp_1_AB & (1 << PIN_LIGFT_DEF);
-    Light_Def_latch = Light_Def;
+/*  Light_Def = ~ioexp_1_AB & (1 << PIN_LIGFT_DEF);
+  if ( Light_Def != Light_Def_latch )
+  {
+    modeBVE = Light_Def;
+    if (!Light_Def) {
+      notch_brk_num = 8;
+    }
   }
+  Light_Def_latch = Light_Def;*/
 }
 
-void read_modeBVE(void) {
-  Light_On = ~ioexp_1_AB & (1 << PIN_LIGHT_ON);
+void read_Light(void) {
+  /*Light_On = ~ioexp_1_AB & (1 << PIN_LIGHT_ON);
   if ( Light_On != Light_On_latch )
   {
     modeBVE = Light_On;
@@ -1247,5 +1308,24 @@ void read_modeBVE(void) {
       notch_brk_num = 8;
     }
   }
-  Light_On_latch = Light_On;
+  Light_On_latch = Light_On;*/
+}
+
+void read_EB(void) {
+
+  EB_SW = !digitalRead(5);
+  if ( EB_SW != EB_SW_latch )
+  {
+    if (EB_SW) {
+      if (modeBVE) {
+        Keyboard.press(KEY_DELETE);//"Delete"
+      }
+    } else {
+      if (modeBVE) {
+        Keyboard.release(KEY_DELETE);//"Delete"
+      }
+    }
+
+  }
+  EB_SW_latch = EB_SW;
 }
