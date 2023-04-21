@@ -21,7 +21,7 @@
 //MC53_ME38_BVE_VM_V3.6.1 電流計を絶対値表示にした、レバーサ不具合修正、ブレーキ角度をPOT_NとPOT_EB間の範囲とした
 //MC53_ME38_BVE_VM_V3.6.2 Arduino Pin9 に ATS復帰(内房線用)　"Homeキー" 追加
 //MC53_ME38_BVE_VM_V3.6.3 他基板連動対応(Serial1送信対応)
-//MC53_ME38_BVE_VM_V3.6.3.2 他基板からキーボードコマンド受付対応、ATS確認をSpacebar(0x20)に変更、Pin6をEBに
+//MC53_ME38_BVE_VM_V3.6.3.2 他基板からキーボードコマンド受付対応、ATS確認をSpacebar(0x20)に変更、Pin6をEBに、チャタリング防止機能テスト
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -56,8 +56,10 @@
 #define PIN_LIGHT_ON 14
 #define PIN_PANTO 15
 
-#define SS_Brk 4   //MCP3008_Brk
-#define SS_Mc SS //MCP23S17_MC
+#define SS_Brk 4  //MCP3008_Brk
+#define SS_Mc SS  //MCP23S17_MC
+
+#define CHAT 1  //チャタリング許容角度
 
 //↓デバッグのコメント(//)を解除するとシリアルモニタでデバッグできます
 //#define DEBUG
@@ -66,7 +68,7 @@ Adafruit_MCP23X17 mcp;
 Adafruit_MCP4725 dac;
 Adafruit_MCP4725 dac2;
 
-SPISettings settings = SPISettings( 1000000 , MSBFIRST , SPI_MODE0 );
+SPISettings settings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
 
 uint16_t ioexp_1_AB = 0;
 
@@ -86,11 +88,12 @@ uint8_t notch_brk = 0;
 uint8_t notch_brk_latch = 0;
 String notch_brk_name = "";
 //以下ブレーキ設定値
-uint16_t notch_brk_angl_max = 80;//直通帯の角度
-uint8_t notch_brk_num = 8;//常用ブレーキ段数
-uint16_t brk_full_angl =
-  +165;//緩め位置から非常最大までの全体角度
-uint16_t brk_eb_angl = 150;//緩め位置に対して非常位置の角度
+uint16_t notch_brk_angl_max = 80;  //直通帯の角度
+uint8_t notch_brk_num = 8;         //常用ブレーキ段数
+uint16_t brk_full_angl = 165;      //緩め位置から非常最大までの全体角度
+uint16_t brk_eb_angl = 150;        //緩め位置に対して非常位置の角度
+int16_t brk_angl = 0;
+int16_t brk_angl_latch = 0;
 //以上ブレーキ設定値
 //以下速度計補正値
 uint16_t spd_adj_010 = 150;
@@ -120,9 +123,9 @@ int16_t curr_limit = 750;
 uint16_t vehicle_res = 500;
 
 //回生モード
-bool curr_kaisei = true; //true:有効　false:無効
+bool curr_kaisei = true;  //true:有効　false:無効
 //計器モード
-bool curr_mode = true; //true:電圧計 false:電流計
+bool curr_mode = true;  //true:電圧計 false:電流計
 
 int8_t iDir = 0;
 int8_t iDir_latch = 0;
@@ -178,18 +181,18 @@ bool modeBVE = true;
 bool modeN = false;
 
 void setup() {
-  pinMode(SS_Brk, OUTPUT); //MCP3008
-  pinMode(SS_Mc, OUTPUT); //MCP23S17_MC
+  pinMode(SS_Brk, OUTPUT);  //MCP3008
+  pinMode(SS_Mc, OUTPUT);   //MCP23S17_MC
 
-  pinMode(5, INPUT_PULLUP); //EBスイッチ
+  pinMode(5, INPUT_PULLUP);  //EBスイッチ
 
-  pinMode(8, OUTPUT); //BVE_Door
+  pinMode(8, OUTPUT);  //BVE_Door
   digitalWrite(8, 0);
 
-  pinMode(9, INPUT_PULLUP); //ATS
-  pinMode(10, INPUT_PULLUP); //予備
-  pinMode(11, INPUT_PULLUP); //予備SW1
-  pinMode(12, INPUT_PULLUP); //予備SW2
+  pinMode(9, INPUT_PULLUP);   //ATS
+  pinMode(10, INPUT_PULLUP);  //予備
+  pinMode(11, INPUT_PULLUP);  //予備SW1
+  pinMode(12, INPUT_PULLUP);  //予備SW2
 
   Serial.begin(115200);
   Serial1.begin(115200);
@@ -203,38 +206,38 @@ void setup() {
     Serial.println("Error.");
   } else {
     // マスコンスイッチを全てプルアップ
-    for (uint8_t i = 0 ; i < 16 ; i++ ) {
+    for (uint8_t i = 0; i < 16; i++) {
       mcp.pinMode(i, INPUT_PULLUP);
     }
   }
 
-  if (EEPROM.get(0, POT_N) < 0)EEPROM.put(0, 0);
-  if (EEPROM.get(2, POT_EB) < 0)EEPROM.put(2, 512);
-  if (EEPROM.get(4, notch_brk_num) < 0)EEPROM.put(4, 8);
-  if (EEPROM.get(6, notch_brk_angl_max) < 0)EEPROM.put(6, 80);
-  if (EEPROM.get(8, brk_eb_angl) < 0)EEPROM.put(8, 150);
-  if (EEPROM.get(10, brk_full_angl) < 0)EEPROM.put(10, 165);
-  if (EEPROM.get(12, spd_adj_010) < 0)EEPROM.put(12, 150);
-  if (EEPROM.get(14, spd_adj_020) < 0)EEPROM.put(14, 400);
-  if (EEPROM.get(16, spd_adj_030) < 0)EEPROM.put(16, 680);
-  if (EEPROM.get(18, spd_adj_040) < 0)EEPROM.put(18, 1010);
-  if (EEPROM.get(20, spd_adj_050) < 0)EEPROM.put(20, 1330);
-  if (EEPROM.get(22, spd_adj_060) < 0)EEPROM.put(22, 1650);
-  if (EEPROM.get(24, spd_adj_070) < 0)EEPROM.put(24, 2000);
-  if (EEPROM.get(26, spd_adj_080) < 0)EEPROM.put(26, 2340);
-  if (EEPROM.get(28, spd_adj_090) < 0)EEPROM.put(28, 2680);
-  if (EEPROM.get(30, spd_adj_100) < 0)EEPROM.put(30, 3020);
-  if (EEPROM.get(32, spd_adj_110) < 0)EEPROM.put(32, 3340);
-  if (EEPROM.get(34, spd_adj_120) < 0)EEPROM.put(34, 3650);
-  if (EEPROM.get(36, spd_adj_130) < 0)EEPROM.put(36, 4000);
-  if (EEPROM.get(38, spd_adj_140) < 0)EEPROM.put(38, 4095);
-  if (EEPROM.get(40, spd_adj_150) < 0)EEPROM.put(40, 4095);
-  if (EEPROM.get(42, spd_adj_160) < 0)EEPROM.put(42, 4095);
-  if (EEPROM.get(44, spd_limit) < 0)EEPROM.put(44, 120);
-  if (EEPROM.get(46, curr_kaisei) == -1)EEPROM.put(46, 1);
-  if (EEPROM.get(48, curr_mode) == -1)EEPROM.put(48, 1);
-  if (EEPROM.get(50, curr_limit) == -1)EEPROM.put(50, 750);
-  if (EEPROM.get(52, vehicle_res) == -1)EEPROM.put(52, 500);
+  if (EEPROM.get(0, POT_N) < 0) EEPROM.put(0, 0);
+  if (EEPROM.get(2, POT_EB) < 0) EEPROM.put(2, 512);
+  if (EEPROM.get(4, notch_brk_num) < 0) EEPROM.put(4, 8);
+  if (EEPROM.get(6, notch_brk_angl_max) < 0) EEPROM.put(6, 80);
+  if (EEPROM.get(8, brk_eb_angl) < 0) EEPROM.put(8, 150);
+  if (EEPROM.get(10, brk_full_angl) < 0) EEPROM.put(10, 165);
+  if (EEPROM.get(12, spd_adj_010) < 0) EEPROM.put(12, 150);
+  if (EEPROM.get(14, spd_adj_020) < 0) EEPROM.put(14, 400);
+  if (EEPROM.get(16, spd_adj_030) < 0) EEPROM.put(16, 680);
+  if (EEPROM.get(18, spd_adj_040) < 0) EEPROM.put(18, 1010);
+  if (EEPROM.get(20, spd_adj_050) < 0) EEPROM.put(20, 1330);
+  if (EEPROM.get(22, spd_adj_060) < 0) EEPROM.put(22, 1650);
+  if (EEPROM.get(24, spd_adj_070) < 0) EEPROM.put(24, 2000);
+  if (EEPROM.get(26, spd_adj_080) < 0) EEPROM.put(26, 2340);
+  if (EEPROM.get(28, spd_adj_090) < 0) EEPROM.put(28, 2680);
+  if (EEPROM.get(30, spd_adj_100) < 0) EEPROM.put(30, 3020);
+  if (EEPROM.get(32, spd_adj_110) < 0) EEPROM.put(32, 3340);
+  if (EEPROM.get(34, spd_adj_120) < 0) EEPROM.put(34, 3650);
+  if (EEPROM.get(36, spd_adj_130) < 0) EEPROM.put(36, 4000);
+  if (EEPROM.get(38, spd_adj_140) < 0) EEPROM.put(38, 4095);
+  if (EEPROM.get(40, spd_adj_150) < 0) EEPROM.put(40, 4095);
+  if (EEPROM.get(42, spd_adj_160) < 0) EEPROM.put(42, 4095);
+  if (EEPROM.get(44, spd_limit) < 0) EEPROM.put(44, 120);
+  if (EEPROM.get(46, curr_kaisei) == -1) EEPROM.put(46, 1);
+  if (EEPROM.get(48, curr_mode) == -1) EEPROM.put(48, 1);
+  if (EEPROM.get(50, curr_limit) == -1) EEPROM.put(50, 750);
+  if (EEPROM.get(52, vehicle_res) == -1) EEPROM.put(52, 500);
 }
 
 void loop() {
@@ -540,10 +543,10 @@ void loop() {
       if (i > 0) {
         int8_t on = strbve.indexOf("ON");
         int8_t off = strbve.indexOf("OFF");
-        if ( on < 0 && off < 0 ) {
+        if (on < 0 && off < 0) {
           Serial.println("SET NG:CURR_KAISEI");
         } else {
-          if ( on > 0 ) {
+          if (on > 0) {
             curr_kaisei = 1;
             Serial.println("SET OK:CURR_KAISEI:ON");
           } else {
@@ -673,63 +676,63 @@ void loop() {
     }
 
     //速度計のリミットを適用
-    if (bve_speed > ( spd_limit * 10 )) {
-      bve_speed = ( spd_limit * 10 );
+    if (bve_speed > (spd_limit * 10)) {
+      bve_speed = (spd_limit * 10);
     }
 
     //速度計補正
     if (bve_speed < 100) {
-      dac.setVoltage(map(bve_speed, 0 , 100 , 0, spd_adj_010), false);
+      dac.setVoltage(map(bve_speed, 0, 100, 0, spd_adj_010), false);
     } else if (bve_speed < 200) {
-      dac.setVoltage(map(bve_speed, 100 , 200 , spd_adj_010, spd_adj_020), false);
+      dac.setVoltage(map(bve_speed, 100, 200, spd_adj_010, spd_adj_020), false);
     } else if (bve_speed < 300) {
-      dac.setVoltage(map(bve_speed, 200 , 300 , spd_adj_020, spd_adj_030), false);
+      dac.setVoltage(map(bve_speed, 200, 300, spd_adj_020, spd_adj_030), false);
     } else if (bve_speed < 400) {
-      dac.setVoltage(map(bve_speed, 300 , 400 , spd_adj_030, spd_adj_040), false);
+      dac.setVoltage(map(bve_speed, 300, 400, spd_adj_030, spd_adj_040), false);
     } else if (bve_speed < 500) {
-      dac.setVoltage(map(bve_speed, 400 , 500 , spd_adj_040, spd_adj_050), false);
+      dac.setVoltage(map(bve_speed, 400, 500, spd_adj_040, spd_adj_050), false);
     } else if (bve_speed < 600) {
-      dac.setVoltage(map(bve_speed, 500 , 600 , spd_adj_050, spd_adj_060), false);
+      dac.setVoltage(map(bve_speed, 500, 600, spd_adj_050, spd_adj_060), false);
     } else if (bve_speed < 700) {
-      dac.setVoltage(map(bve_speed, 600 , 700 , spd_adj_060, spd_adj_070), false);
+      dac.setVoltage(map(bve_speed, 600, 700, spd_adj_060, spd_adj_070), false);
     } else if (bve_speed < 800) {
-      dac.setVoltage(map(bve_speed, 700 , 800 , spd_adj_070, spd_adj_080), false);
+      dac.setVoltage(map(bve_speed, 700, 800, spd_adj_070, spd_adj_080), false);
     } else if (bve_speed < 900) {
-      dac.setVoltage(map(bve_speed, 800 , 900 , spd_adj_080, spd_adj_090), false);
+      dac.setVoltage(map(bve_speed, 800, 900, spd_adj_080, spd_adj_090), false);
     } else if (bve_speed < 1000) {
-      dac.setVoltage(map(bve_speed, 900 , 1000 , spd_adj_090, spd_adj_100), false);
+      dac.setVoltage(map(bve_speed, 900, 1000, spd_adj_090, spd_adj_100), false);
     } else if (bve_speed < 1100) {
-      dac.setVoltage(map(bve_speed, 1000 , 1100 , spd_adj_100, spd_adj_110), false);
+      dac.setVoltage(map(bve_speed, 1000, 1100, spd_adj_100, spd_adj_110), false);
     } else if (bve_speed < 1200) {
-      dac.setVoltage(map(bve_speed, 1100 , 1200 , spd_adj_110, spd_adj_120), false);
+      dac.setVoltage(map(bve_speed, 1100, 1200, spd_adj_110, spd_adj_120), false);
     } else if (bve_speed < 1300) {
-      dac.setVoltage(map(bve_speed, 1200 , 1300 , spd_adj_120, spd_adj_130), false);
+      dac.setVoltage(map(bve_speed, 1200, 1300, spd_adj_120, spd_adj_130), false);
     } else if (bve_speed < 1400) {
-      dac.setVoltage(map(bve_speed, 1300 , 1400 , spd_adj_130, spd_adj_140), false);
+      dac.setVoltage(map(bve_speed, 1300, 1400, spd_adj_130, spd_adj_140), false);
     } else if (bve_speed < 1500) {
-      dac.setVoltage(map(bve_speed, 1400 , 1500 , spd_adj_140, spd_adj_150), false);
+      dac.setVoltage(map(bve_speed, 1400, 1500, spd_adj_140, spd_adj_150), false);
     } else if (bve_speed < 1600) {
-      dac.setVoltage(map(bve_speed, 1500 , 1600 , spd_adj_150, spd_adj_160), false);
+      dac.setVoltage(map(bve_speed, 1500, 1600, spd_adj_150, spd_adj_160), false);
     } else {
-      dac.setVoltage(map(bve_speed, 1600 , 1700 , spd_adj_160, 4095), false);
+      dac.setVoltage(map(bve_speed, 1600, 1700, spd_adj_160, 4095), false);
     }
 
     //電流計
-    if (!curr_kaisei && (bve_current < 0) ) {
+    if (!curr_kaisei && (bve_current < 0)) {
       bve_current = 0;
     }
     if (curr_mode) {
-      uint16_t v = 1500 - ( bve_current * (vehicle_res / 1000.0 ) ) ;
+      uint16_t v = 1500 - (bve_current * (vehicle_res / 1000.0));
       if (v > 2000) {
         v = 2000;
       }
-      dac2.setVoltage(map(v, 0 , 2000 , 0, 4095), false);
+      dac2.setVoltage(map(v, 0, 2000, 0, 4095), false);
     } else {
       int current = abs(bve_current);
       if (current > curr_limit) {
         current = curr_limit;
       }
-      dac2.setVoltage(map(current, 0 , curr_limit , 0, 4095), false);
+      dac2.setVoltage(map(current, 0, curr_limit, 0, 4095), false);
     }
 
     //戸閉灯指示
@@ -751,18 +754,18 @@ void loop() {
     if (Serial.available() && modeBVE) {
     Serial.readStringUntil('\n');
     }*/
-  read_IOexp();         //IOエキスパンダ読込ルーチン
-  read_Light_Def();     //減光ライト読込ルーチン
-  read_Light();         //前照灯読込ルーチン
-  read_MC();            //マスコンノッチ読込ルーチン
-  read_Dir();           //マスコンレバーサ読込ルーチン
-  read_Break();//ブレーキハンドル読込ルーチン
-  read_Break_Setting(); //ブレーキハンドル読込ルーチン(未実装)
-  read_Horn();          //ホーンペダル読込ルーチン
-  read_Ats();           //ATS確認・警報持続読込ルーチン
-  read_Panto();         //強制終了ルーチン
-  read_EB();            //EBスイッチ読込ルーチン
-  keyboard_control();   //キーボード(HID)アウトプットルーチン
+  read_IOexp();          //IOエキスパンダ読込ルーチン
+  read_Light_Def();      //減光ライト読込ルーチン
+  read_Light();          //前照灯読込ルーチン
+  read_MC();             //マスコンノッチ読込ルーチン
+  read_Dir();            //マスコンレバーサ読込ルーチン
+  read_Break();          //ブレーキハンドル読込ルーチン
+  read_Break_Setting();  //ブレーキハンドル読込ルーチン(未実装)
+  read_Horn();           //ホーンペダル読込ルーチン
+  read_Ats();            //ATS確認・警報持続読込ルーチン
+  read_Panto();          //強制終了ルーチン
+  read_EB();             //EBスイッチ読込ルーチン
+  keyboard_control();    //キーボード(HID)アウトプットルーチン
 
   delay(10);
 
@@ -787,10 +790,10 @@ void read_IOexp() {
   uint16_t temp_ioexp1_ini = mcp.readGPIOAB();
   uint8_t n = 3;
   if (temp_ioexp1_ini != 0) {
-    for (uint8_t i = 0 ; i < n ; i++ ) {
+    for (uint8_t i = 0; i < n; i++) {
       uint16_t temp_ioexp1 = mcp.readGPIOAB();
       if (temp_ioexp1 != 0) {
-        if (temp_ioexp1_ini == temp_ioexp1 ) {
+        if (temp_ioexp1_ini == temp_ioexp1) {
           if (i == n - 1) {
             ioexp_1_AB = temp_ioexp1;
           }
@@ -805,19 +808,19 @@ void read_IOexp() {
 }
 
 //MCP3008ADコンバータ読取
-uint16_t adcRead(uint8_t ch) { // 0 .. 7
-  byte channelData = (ch + 8 ) << 4;
+uint16_t adcRead(uint8_t ch) {  // 0 .. 7
+  byte channelData = (ch + 8) << 4;
   // Serial.println(String(channelData,BIN));
   SPI.beginTransaction(settings);
   digitalWrite(SS_Brk, LOW);
   delayMicroseconds(100);
-  SPI.transfer(0b00000001); // Start bit 1
-  byte highByte = SPI.transfer(channelData); // singleEnd
-  byte lowByte = SPI.transfer(0x00); // dummy
+  SPI.transfer(0b00000001);                   // Start bit 1
+  byte highByte = SPI.transfer(channelData);  // singleEnd
+  byte lowByte = SPI.transfer(0x00);          // dummy
   delayMicroseconds(100);
   digitalWrite(SS_Brk, HIGH);
   SPI.endTransaction();
-  return ((highByte & 0x03) << 8) + lowByte ;
+  return ((highByte & 0x03) << 8) + lowByte;
 }
 
 //MCP23S17マスコンノッチ状態読込 (MC53抑速ブレーキ対応)
@@ -878,7 +881,6 @@ void read_MC(void) {
     Serial.print(" mc_H_latch:");
     Serial.println(notch_mc_H_latch);
 #endif
-
   }
   mcBit_latch = mcBit;
 }
@@ -904,50 +906,56 @@ void read_Break(void) {
   uint16_t adc = adcRead(0);
   if (adc < POT_N) {
     adc = POT_N;
-  } else if ( adc > POT_EB) {
+  } else if (adc > POT_EB) {
     adc = POT_EB;
   }
-  int16_t deg = map(adc, POT_N , POT_EB , 0, brk_full_angl);
+  brk_angl = map(adc, POT_N, POT_EB, 0, brk_full_angl);
 
 #ifdef DEBUG
   Serial.print(" Pot1:");
   Serial.print(10000 + adcRead(0));
   Serial.print(" Deg:");
-  Serial.println(deg);
+  Serial.println(brk_angl);
 #endif
+  if (abs(brk_angl - brk_angl_latch) >= CHAT) {
+    if (brk_angl < ((float)notch_brk_angl_max / (notch_brk_num * 2))) {
+      notch_brk = notch_brk_num + 1;
+      notch_brk_name = "N ";
+    } else if (brk_angl < notch_brk_angl_max) {
+      uint8_t temp_notch_brk = round(((float)brk_angl / (float)notch_brk_angl_max) * notch_brk_num);
+      notch_brk = notch_brk_num + 1 - temp_notch_brk;
+      String s = String(temp_notch_brk);
+      notch_brk_name = "B" + s;
 
-
-  if (deg < ( (float) notch_brk_angl_max / ( notch_brk_num * 2 ))) {
-    notch_brk = notch_brk_num + 1;
-    notch_brk_name = "N ";
-  } else if ( deg < notch_brk_angl_max) {
-    uint8_t temp_notch_brk = round( ((float) deg / (float)notch_brk_angl_max) * notch_brk_num );
-    notch_brk = notch_brk_num + 1 - temp_notch_brk;
-    String s = String( temp_notch_brk );
-    notch_brk_name = "B" + s;
-  } else if ( deg < brk_eb_angl ) {
-    notch_brk = 1;
-    notch_brk_name = "B" + String( notch_brk_num );
-  } else {
-    notch_brk = 0;
-    notch_brk_name = "EB";
+    } else if (brk_angl < brk_eb_angl) {
+      notch_brk = 1;
+      notch_brk_name = "B" + String(notch_brk_num);
+    } else {
+      notch_brk = 0;
+      notch_brk_name = "EB";
+    }
+    brk_angl_latch = brk_angl;
   }
 
 #ifdef DEBUG
   bool sw = 0;
-  if (adcRead(1) < 512)sw = 0; else sw = 1;
+  if (adcRead(1) < 512) sw = 0;
+  else sw = 1;
   Serial.print(" SW1:");
   Serial.print(sw);
 
-  if (adcRead(2) < 512)sw = 0; else sw = 1;
+  if (adcRead(2) < 512) sw = 0;
+  else sw = 1;
   Serial.print(" SW2:");
   Serial.print(sw);
 
-  if (adcRead(3) < 512)sw = 0; else sw = 1;
+  if (adcRead(3) < 512) sw = 0;
+  else sw = 1;
   Serial.print(" SW3:");
   Serial.print(sw);
 
-  if (adcRead(4) < 512)sw = 0; else sw = 1;
+  if (adcRead(4) < 512) sw = 0;
+  else sw = 1;
   Serial.print(" SW4:");
   Serial.print(sw);
 #endif
@@ -956,7 +964,7 @@ void read_Break(void) {
 //キーボード(HID)出力
 void keyboard_control(void) {
   //マスコンノッチが前回と異なるとき
-  if (notch_mc != notch_mc_latch ) {
+  if (notch_mc != notch_mc_latch) {
     if (modeBVE) {
       uint8_t d = abs(notch_mc - notch_mc_latch);
 #ifdef DEBUG
@@ -967,11 +975,11 @@ void keyboard_control(void) {
       Serial.print(" Key:");
 #endif
       //力行ノッチ
-      if ( notch_mc >= 50 && notch_mc_latch >= 50 && notch_mc <= 55 && notch_mc_latch <= 55 ) {
+      if (notch_mc >= 50 && notch_mc_latch >= 50 && notch_mc <= 55 && notch_mc_latch <= 55) {
         //進段
         if ((notch_mc - notch_mc_latch) > 0) {
-          for (uint8_t i = 0; i < d ; i ++) {
-            Keyboard.write(0x5A);//"/"
+          for (uint8_t i = 0; i < d; i++) {
+            Keyboard.write(0x5A);  //"/"
 #ifdef DEBUG
             Serial.println("Z");
 #endif
@@ -979,8 +987,8 @@ void keyboard_control(void) {
         }
         //戻し
         if ((notch_mc - notch_mc_latch) < 0) {
-          for (uint8_t i = 0; i < d ; i ++) {
-            Keyboard.write(0x41);//"/"
+          for (uint8_t i = 0; i < d; i++) {
+            Keyboard.write(0x41);  //"/"
 #ifdef DEBUG
             Serial.println("A");
 #endif
@@ -996,15 +1004,15 @@ void keyboard_control(void) {
   }
 
   //抑速ノッチが前回と異なるとき
-  if (notch_mc_H != notch_mc_H_latch ) {
+  if (notch_mc_H != notch_mc_H_latch) {
     if (modeBVE) {
       uint8_t d = abs(notch_mc_H - notch_mc_H_latch);
       //抑速ノッチ
-      if ( notch_mc_H >= 100 && notch_mc_H_latch >= 100 && notch_mc_H <= 105 && notch_mc_H_latch <= 105 ) {
+      if (notch_mc_H >= 100 && notch_mc_H_latch >= 100 && notch_mc_H <= 105 && notch_mc_H_latch <= 105) {
         //進段
         if ((notch_mc_H - notch_mc_H_latch) > 0) {
-          for (uint8_t i = 0; i < d ; i ++) {
-            Keyboard.write(0x51);//"/"
+          for (uint8_t i = 0; i < d; i++) {
+            Keyboard.write(0x51);  //"/"
 #ifdef DEBUG
             Serial.println("Q");
 #endif
@@ -1012,15 +1020,14 @@ void keyboard_control(void) {
         }
         //戻し
         if ((notch_mc_H - notch_mc_H_latch) < 0) {
-          for (uint8_t i = 0; i < d ; i ++) {
-            Keyboard.write(0x41);//"/"
+          for (uint8_t i = 0; i < d; i++) {
+            Keyboard.write(0x41);  //"/"
 #ifdef DEBUG
             Serial.println("A");
 #endif
           }
         }
       }
-
     }
     if (modeN) {
       if (notch_brk == notch_brk_num + 1) {
@@ -1048,11 +1055,11 @@ void keyboard_control(void) {
       Serial.print(" Key:");
 #endif
       //ブレーキノッチ
-      if ( notch_brk <= (notch_brk_num + 1) && notch_brk_latch <= (notch_brk_num + 1) && notch_brk > 0) {
+      if (notch_brk <= (notch_brk_num + 1) && notch_brk_latch <= (notch_brk_num + 1) && notch_brk > 0) {
         //戻し
         if ((notch_brk - notch_brk_latch) > 0) {
-          for (uint8_t i = 0; i < d ; i ++) {
-            Keyboard.write(0x2C);//","
+          for (uint8_t i = 0; i < d; i++) {
+            Keyboard.write(0x2C);  //","
 #ifdef DEBUG
             Serial.println(",");
 #endif
@@ -1060,8 +1067,8 @@ void keyboard_control(void) {
         }
         //ブレーキ
         if ((notch_brk - notch_brk_latch) < 0) {
-          for (uint8_t i = 0; i < d ; i ++) {
-            Keyboard.write(0x2E);//"."
+          for (uint8_t i = 0; i < d; i++) {
+            Keyboard.write(0x2E);  //"."
 #ifdef DEBUG
             Serial.println(".");
 #endif
@@ -1069,7 +1076,7 @@ void keyboard_control(void) {
         }
       }
       if (notch_brk == 0) {
-        Keyboard.write(0x2F);//"/"
+        Keyboard.write(0x2F);  //"/"
 #ifdef DEBUG
         Serial.println("/");
 #endif
@@ -1090,8 +1097,8 @@ void keyboard_control(void) {
 #endif
       //前進
       if ((iDir - iDir_latch) > 0) {
-        for (uint8_t i = 0; i < d ; i ++) {
-          Keyboard.write(0xDA);//"↑"
+        for (uint8_t i = 0; i < d; i++) {
+          Keyboard.write(0xDA);  //"↑"
 #ifdef DEBUG
           Serial.println("↑");
 #endif
@@ -1099,8 +1106,8 @@ void keyboard_control(void) {
       }
       //後退
       if ((iDir - iDir_latch) < 0) {
-        for (uint8_t i = 0; i < d ; i ++) {
-          Keyboard.write(0xD9);//"↓"
+        for (uint8_t i = 0; i < d; i++) {
+          Keyboard.write(0xD9);  //"↓"
 #ifdef DEBUG
           Serial.println("↓");
 #endif
@@ -1143,8 +1150,8 @@ void read_Break_Setting(void) {
       //Serial.println("Mode_1");
     } else if (setMode_N == 2) {
       setMode_N = 0;
-      POT_N = (uint16_t) adj_N;
-      EEPROM.put(0, POT_N );
+      POT_N = (uint16_t)adj_N;
+      EEPROM.put(0, POT_N);
       Serial.print("NEW POT_N=");
       Serial.println(POT_N);
     }
@@ -1170,7 +1177,7 @@ void read_Break_Setting(void) {
       //Serial.println("Mode_1");
     } else if (setMode_EB == 2) {
       setMode_EB = 0;
-      POT_EB = (uint16_t) adj_EB;
+      POT_EB = (uint16_t)adj_EB;
       EEPROM.put(2, POT_EB);
       Serial.print("NEW POT_EB=");
       Serial.println(POT_EB);
@@ -1182,11 +1189,10 @@ void read_Break_Setting(void) {
 
 void read_Horn(void) {
   Horn_1 = ~ioexp_1_AB & (1 << PIN_HORN_1);
-  if ( Horn_1 != Horn_1_latch )
-  {
+  if (Horn_1 != Horn_1_latch) {
     if (Horn_1) {
       if (modeBVE) {
-        Keyboard.press(0xB0);//"Enter"
+        Keyboard.press(0xB0);  //"Enter"
       }
     } else {
       if (modeBVE) {
@@ -1197,11 +1203,10 @@ void read_Horn(void) {
   Horn_1_latch = Horn_1;
 
   Horn_2 = ~ioexp_1_AB & (1 << PIN_HORN_2);
-  if ( Horn_2 != Horn_2_latch )
-  {
-    if (Horn_2 ) {
+  if (Horn_2 != Horn_2_latch) {
+    if (Horn_2) {
       if (modeBVE) {
-        Keyboard.press(0xDF);//"Enter"
+        Keyboard.press(0xDF);  //"Enter"
       }
     } else {
       if (modeBVE) {
@@ -1215,12 +1220,11 @@ void read_Horn(void) {
 void read_Ats(void) {
   //ATS警報持続
   Ats_Cont = ~ioexp_1_AB & (1 << PIN_ATS_CONT);
-  if ( Ats_Cont != Ats_Cont_latch )
-  {
+  if (Ats_Cont != Ats_Cont_latch) {
     if (Ats_Cont) {
       if (modeBVE) {
         if (adcRead(1) < 1) {
-          Keyboard.press(0xD1);//"Insert"
+          Keyboard.press(0xD1);  //"Insert"
         }
       }
     } else {
@@ -1233,12 +1237,11 @@ void read_Ats(void) {
 
   //ATS確認
   Ats_Conf = ~ioexp_1_AB & (1 << PIN_ATS_CONF);
-  if ( Ats_Conf != Ats_Conf_latch )
-  {
-    if (Ats_Conf ) {
+  if (Ats_Conf != Ats_Conf_latch) {
+    if (Ats_Conf) {
       if (modeBVE) {
         if (adcRead(1) < 1) {
-          Keyboard.press(0x20);//"Space"
+          Keyboard.press(0x20);  //"Space"
         }
       }
     } else {
@@ -1251,12 +1254,11 @@ void read_Ats(void) {
 
   //ATS復帰
   Ats_Rec = !digitalRead(9);
-  if ( Ats_Rec != Ats_Rec_latch )
-  {
-    if (Ats_Rec ) {
+  if (Ats_Rec != Ats_Rec_latch) {
+    if (Ats_Rec) {
       if (modeBVE) {
         //if (adcRead(1) < 1) {
-        Keyboard.press(0xD2);//"Home"
+        Keyboard.press(0xD2);  //"Home"
         //}
       }
     } else {
@@ -1271,12 +1273,11 @@ void read_Ats(void) {
 void read_Panto(void) {
 
   Panto = ~ioexp_1_AB & (1 << PIN_PANTO);
-  if ( Panto != Panto_latch )
-  {
+  if (Panto != Panto_latch) {
     if (Panto) {
       if (modeBVE) {
-        Keyboard.press(0x82);//"Alt"
-        Keyboard.press(0xC5);//"F4"
+        Keyboard.press(0x82);  //"Alt"
+        Keyboard.press(0xC5);  //"F4"
       }
     } else {
       if (modeBVE) {
@@ -1288,7 +1289,7 @@ void read_Panto(void) {
 }
 
 void read_Light_Def(void) {
-/*  Light_Def = ~ioexp_1_AB & (1 << PIN_LIGFT_DEF);
+  /*  Light_Def = ~ioexp_1_AB & (1 << PIN_LIGFT_DEF);
   if ( Light_Def != Light_Def_latch )
   {
     modeBVE = Light_Def;
@@ -1314,18 +1315,16 @@ void read_Light(void) {
 void read_EB(void) {
 
   EB_SW = !digitalRead(5);
-  if ( EB_SW != EB_SW_latch )
-  {
+  if (EB_SW != EB_SW_latch) {
     if (EB_SW) {
       if (modeBVE) {
-        Keyboard.press(KEY_DELETE);//"Delete"
+        Keyboard.press(KEY_DELETE);  //"Delete"
       }
     } else {
       if (modeBVE) {
-        Keyboard.release(KEY_DELETE);//"Delete"
+        Keyboard.release(KEY_DELETE);  //"Delete"
       }
     }
-
   }
   EB_SW_latch = EB_SW;
 }
