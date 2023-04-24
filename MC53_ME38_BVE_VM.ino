@@ -23,6 +23,7 @@
 //MC53_ME38_BVE_VM_V3.6.3 他基板連動対応(Serial1送信対応)
 //MC53_ME38_BVE_VM_V3.6.3.2 他基板からキーボードコマンド受付対応、ATS確認をSpacebar(0x20)に変更、Pin6をEBに、チャタリング防止機能テスト
 //MC53_ME38_BVE_VM_V3.6.3.3 速度調整修正、常用最大位置を設定可能とする(デフォルト67°)
+//MC53_ME38_BVE_VM_V3.6.3.4 速度計修正、微修正
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -328,7 +329,7 @@ void loop() {
         Serial.println(s);
       }
       //常用最大角度
-      i = strbve.indexOf("brk_sap_max_angl:");
+      i = strbve.indexOf("BRK_SAP_ANGL:");
       if (i > 0) {
         uint16_t num = strbve.substring(i + 13, i + 16).toInt();
         if (num == 0 || num > 270) {
