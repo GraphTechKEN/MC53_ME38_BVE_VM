@@ -251,8 +251,10 @@ void setup() {
   if (EEPROM.get(56, brk_sap_max_angl) < 0) EEPROM.put(54, 67);
   //速度計テスト
   disp_SpeedMeter(spd_limit * 10, spd_limit);
+  dac2.setVoltage(map(curr_limit, 0, curr_limit, 0, 4095), false);
   delay(1500);
   disp_SpeedMeter(0, spd_limit);
+  dac2.setVoltage(0, false);
 }
 
 void loop() {
@@ -268,7 +270,7 @@ void loop() {
     } else if (str1.startsWith("KEY:")) {
       Keyboard.print(str1.substring(4));
     }
-  }*/
+    }*/
   if (Serial.available() && modeBVE) {
     strbve = Serial.readStringUntil('\r');
     //シリアル設定モード
@@ -1224,26 +1226,26 @@ void read_Panto(void) {
 
 void read_Light_Def(void) {
   /*  Light_Def = ~ioexp_1_AB & (1 << PIN_LIGFT_DEF);
-  if ( Light_Def != Light_Def_latch )
-  {
+    if ( Light_Def != Light_Def_latch )
+    {
     modeBVE = Light_Def;
     if (!Light_Def) {
       notch_brk_num = 8;
     }
-  }
-  Light_Def_latch = Light_Def;*/
+    }
+    Light_Def_latch = Light_Def;*/
 }
 
 void read_Light(void) {
   /*Light_On = ~ioexp_1_AB & (1 << PIN_LIGHT_ON);
-  if ( Light_On != Light_On_latch )
-  {
+    if ( Light_On != Light_On_latch )
+    {
     modeBVE = Light_On;
     if (!Light_On) {
       notch_brk_num = 8;
     }
-  }
-  Light_On_latch = Light_On;*/
+    }
+    Light_On_latch = Light_On;*/
 }
 
 void read_EB(void) {
