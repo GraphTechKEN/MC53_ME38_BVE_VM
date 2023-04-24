@@ -24,6 +24,7 @@
 //MC53_ME38_BVE_VM_V3.6.3.2 他基板からキーボードコマンド受付対応、ATS確認をSpacebar(0x20)に変更、Pin6をEBに、チャタリング防止機能テスト
 //MC53_ME38_BVE_VM_V3.6.3.3 速度調整修正、常用最大位置を設定可能とする(デフォルト67°)
 //MC53_ME38_BVE_VM_V3.6.3.4 速度計修正、微修正
+//MC53_ME38_BVE_VM_V3.6.3.5 ブレーキ弁調整モード
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -88,11 +89,13 @@ uint8_t notch_brk = 0;  //ブレーキノッチ
 uint8_t notch_brk_latch = 0;
 String notch_brk_name = "";
 //以下ブレーキ設定値
-uint16_t brk_sap_angl = 80;  //直通帯の角度
-uint8_t notch_brk_num = 8;         //常用ブレーキ段数
-uint16_t brk_full_angl = 165;      //ブレーキ幅範囲
-uint16_t brk_eb_angl = 150;        //緩め位置に対して非常位置の角度
-uint16_t brk_sap_max_angl = 67;        //常用最大角度
+uint16_t adc = 0;
+uint16_t adc_latch = 0;
+uint16_t brk_sap_angl = 80;      //直通帯の角度
+uint8_t notch_brk_num = 8;       //常用ブレーキ段数
+uint16_t brk_full_angl = 165;    //ブレーキ幅範囲
+uint16_t brk_eb_angl = 150;      //緩め位置に対して非常位置の角度
+uint16_t brk_sap_max_angl = 67;  //常用最大角度
 float brk_angl = 0;
 float brk_angl_latch = 0;
 //以上ブレーキ設定値
@@ -184,6 +187,7 @@ bool btnD_latch = false;
 //運転モード
 bool modeBVE = true;
 bool modeN = false;
+bool modeADJ = false;
 
 void setup() {
   pinMode(SS_Brk, OUTPUT);  //MCP3008
@@ -246,7 +250,7 @@ void setup() {
   if (EEPROM.get(54, chat_filter) < 0) EEPROM.put(54, 1);
   if (EEPROM.get(56, brk_sap_max_angl) < 0) EEPROM.put(54, 67);
   //速度計テスト
-  disp_SpeedMeter(spd_limit * 10 , spd_limit);
+  disp_SpeedMeter(spd_limit * 10, spd_limit);
   delay(1500);
   disp_SpeedMeter(0, spd_limit);
 }
@@ -329,14 +333,14 @@ void loop() {
         Serial.println(s);
       }
       //常用最大角度
-      i = strbve.indexOf("BRK_SAP_ANGL:");
+      i = strbve.indexOf("BRK_SAP_MAX_ANGL:");
       if (i > 0) {
-        uint16_t num = strbve.substring(i + 13, i + 16).toInt();
+        uint16_t num = strbve.substring(i + 17, i + 20).toInt();
         if (num == 0 || num > 270) {
-          s = "SET NG:brk_sap_max_angl";
+          s = "SET NG:BRK_SAP_MAX_ANGL";
         } else {
           brk_sap_max_angl = num;
-          s = "SET OK:brk_sap_max_angl=";
+          s = "SET OK:BRK_SAP_MAX_ANGL=";
           s += brk_sap_max_angl;
           EEPROM.put(56, brk_sap_max_angl);
         }
@@ -513,7 +517,7 @@ void loop() {
         Serial.println(brk_eb_angl);
         Serial.print("SET READ:BRK_FULL_ANGL=");
         Serial.println(brk_full_angl);
-        Serial.print("SET READ:brk_sap_max_angl=");
+        Serial.print("SET READ:BRK_SAP_MAX_ANGL=");
         Serial.println(brk_sap_max_angl);
         Serial.print("SET READ:CHAT_FILTER=");
         Serial.println(chat_filter);
@@ -571,6 +575,21 @@ void loop() {
         } else {
           modeN = false;
           Serial.println("SET OK:MODE_N:OFF");
+        }
+      }
+      //ブレーキ弁調整モード
+      i = strbve.indexOf("MODE_ADJ:");
+      if (i > 0) {
+        int8_t on = strbve.indexOf("ON");
+        int8_t off = strbve.indexOf("OFF");
+        if (on < 0 && off < 0) {
+          Serial.println("SET NG");
+        } else if (on > 0 && off < 0) {
+          modeADJ = true;
+          Serial.println("SET OK:MODE_ADJ:ON");
+        } else {
+          modeADJ = false;
+          Serial.println("SET OK:MODE_ADJ:OFF");
         }
       }
       //チャタリング
@@ -798,7 +817,7 @@ void read_Dir(void) {
 
 //ブレーキ角度読取
 void read_Break(void) {
-  uint16_t adc = adcRead(0);
+  adc = adcRead(0);
   if (adc < POT_N) {
     adc = POT_N;
   } else if (adc > POT_EB) {
@@ -806,11 +825,11 @@ void read_Break(void) {
   }
   brk_angl = map(adc, POT_N, POT_EB, 0, brk_full_angl * 100) / 100.0;
 
-  if (mode_POT) {
+  if (mode_POT && !modeADJ) {
     Serial.print(" Pot1:");
-    Serial.print(10000 + adcRead(0));
+    Serial.print(10000 + adc);
     Serial.print(" Deg:");
-    Serial.print(brk_angl);
+    Serial.print(1000 + brk_angl);
   }
   if (abs(brk_angl - brk_angl_latch) >= chat_filter) {
     //直通帯位置
@@ -835,10 +854,21 @@ void read_Break(void) {
     }
     brk_angl_latch = brk_angl;
   }
-  if (mode_POT) {
+  //ポテンショ生データ表示モード
+  if (mode_POT && !modeADJ) {
     Serial.print(" Notch:");
     Serial.println(notch_brk_name);
   }
+  //調整モード
+  if (!mode_POT && modeADJ && adc != adc_latch) {
+    Serial.print("ADC:");
+    Serial.print(10000 + adc);
+    Serial.print(" DEG:");
+    Serial.print(1000 + brk_angl);
+    Serial.print(" ");
+    Serial.println(notch_brk_name);
+  }
+  adc_latch = adc;
 
 
 #ifdef DEBUG
@@ -949,7 +979,7 @@ void keyboard_control(void) {
 
   //ブレーキノッチ(角度)が前回と異なるとき
   if (notch_brk != notch_brk_latch) {
-    if (modeBVE) {
+    if (modeBVE && !modeADJ) {
       uint8_t d = abs(notch_brk - notch_brk_latch);
 #ifdef DEBUG
       Serial.print(" notch_brk:");
@@ -985,9 +1015,9 @@ void keyboard_control(void) {
         Serial.println("/");
 #endif
       }
-      if (modeN) {
-        Serial.println(notch_brk_name);
-      }
+    }
+    if (modeN) {
+      Serial.println(notch_brk_name);
     }
   }
 
@@ -1038,7 +1068,7 @@ void read_Break_Setting(void) {
   bool eb = (adcRead(6) < 512);
   if (n) {
     if (setMode_N == 0) {
-      adj_N = adcRead(0);
+      adj_N = adc;
       setMode_N = 1;
       iniMillis_N = millis();
       Serial.print("POT_N=");
@@ -1050,7 +1080,7 @@ void read_Break_Setting(void) {
         setMode_N = 2;
         //Serial.println("Mode_1");
       }
-      adj_N = adj_N * 0.9 + adcRead(0) * 0.1;
+      adj_N = adj_N * 0.9 + adc * 0.1;
       //Serial.println("Mode_1");
     } else if (setMode_N == 2) {
       setMode_N = 0;
@@ -1065,7 +1095,7 @@ void read_Break_Setting(void) {
 
   if (eb) {
     if (setMode_EB == 0) {
-      adj_EB = adcRead(0);
+      adj_EB = adc;
       setMode_EB = 1;
       iniMillis_EB = millis();
       Serial.print("POT_EB=");
@@ -1077,7 +1107,7 @@ void read_Break_Setting(void) {
         setMode_EB = 2;
         //Serial.println("Mode_1");
       }
-      adj_EB = adj_EB * 0.9 + adcRead(0) * 0.1;
+      adj_EB = adj_EB * 0.9 + adc * 0.1;
       //Serial.println("Mode_1");
     } else if (setMode_EB == 2) {
       setMode_EB = 0;
