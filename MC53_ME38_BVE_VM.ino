@@ -87,11 +87,11 @@ uint8_t notch_brk = 0;  //ブレーキノッチ
 uint8_t notch_brk_latch = 0;
 String notch_brk_name = "";
 //以下ブレーキ設定値
-uint16_t notch_brk_angl_max = 80;  //直通帯の角度
+uint16_t brk_sap_angl = 80;  //直通帯の角度
 uint8_t notch_brk_num = 8;         //常用ブレーキ段数
 uint16_t brk_full_angl = 165;      //ブレーキ幅範囲
 uint16_t brk_eb_angl = 150;        //緩め位置に対して非常位置の角度
-uint16_t brk_max_angl = 67;        //常用最大角度
+uint16_t brk_sap_max_angl = 67;        //常用最大角度
 float brk_angl = 0;
 float brk_angl_latch = 0;
 //以上ブレーキ設定値
@@ -200,8 +200,8 @@ void setup() {
 
   Serial.begin(115200);
   Serial1.begin(115200);
-  Serial.setTimeout(10);
-  Serial1.setTimeout(10);
+  //Serial.setTimeout(10);
+  //Serial1.setTimeout(10);
   dac.begin(0x60);
   dac2.begin(0x61);
   Keyboard.begin();
@@ -218,7 +218,7 @@ void setup() {
   if (EEPROM.get(0, POT_N) < 0) EEPROM.put(0, 0);
   if (EEPROM.get(2, POT_EB) < 0) EEPROM.put(2, 512);
   if (EEPROM.get(4, notch_brk_num) < 0) EEPROM.put(4, 8);
-  if (EEPROM.get(6, notch_brk_angl_max) < 0) EEPROM.put(6, 80);
+  if (EEPROM.get(6, brk_sap_angl) < 0) EEPROM.put(6, 80);
   if (EEPROM.get(8, brk_eb_angl) < 0) EEPROM.put(8, 150);
   if (EEPROM.get(10, brk_full_angl) < 0) EEPROM.put(10, 165);
   if (EEPROM.get(12, spd_adj_010) < 0) EEPROM.put(12, 150);
@@ -243,7 +243,11 @@ void setup() {
   if (EEPROM.get(50, curr_limit) < 0) EEPROM.put(50, 750);
   if (EEPROM.get(52, vehicle_res) < 0) EEPROM.put(52, 500);
   if (EEPROM.get(54, chat_filter) < 0) EEPROM.put(54, 1);
-  if (EEPROM.get(56, brk_max_angl) < 0) EEPROM.put(54, 67);
+  if (EEPROM.get(56, brk_sap_max_angl) < 0) EEPROM.put(54, 67);
+  //速度計テスト
+  disp_SpeedMeter(spd_limit * 10 , spd_limit);
+  delay(1500);
+  disp_SpeedMeter(0, spd_limit);
 }
 
 void loop() {
@@ -288,10 +292,10 @@ void loop() {
         if (num == 0 || num > brk_eb_angl) {
           s = "SET NG:BRK_ANGL";
         } else {
-          notch_brk_angl_max = num;
+          brk_sap_angl = num;
           s = "SET OK:BRK_ANGL=";
-          s += notch_brk_angl_max;
-          EEPROM.put(6, notch_brk_angl_max);
+          s += brk_sap_angl;
+          EEPROM.put(6, brk_sap_angl);
         }
         Serial.println(s);
       }
@@ -324,16 +328,16 @@ void loop() {
         Serial.println(s);
       }
       //常用最大角度
-      i = strbve.indexOf("BRK_MAX_ANGL:");
+      i = strbve.indexOf("brk_sap_max_angl:");
       if (i > 0) {
         uint16_t num = strbve.substring(i + 13, i + 16).toInt();
         if (num == 0 || num > 270) {
-          s = "SET NG:BRK_MAX_ANGL";
+          s = "SET NG:brk_sap_max_angl";
         } else {
-          brk_max_angl = num;
-          s = "SET OK:BRK_MAX_ANGL=";
-          s += brk_max_angl;
-          EEPROM.put(56, brk_max_angl);
+          brk_sap_max_angl = num;
+          s = "SET OK:brk_sap_max_angl=";
+          s += brk_sap_max_angl;
+          EEPROM.put(56, brk_sap_max_angl);
         }
         Serial.println(s);
       }
@@ -500,12 +504,18 @@ void loop() {
       //ブレーキ設定読み出し
       i = strbve.indexOf("BRK_READ:");
       if (i > 0) {
-        Serial.println("SET READ:BRK_NUM=" + notch_brk_num);
-        Serial.println("SET READ:BRK_ANGL=" + notch_brk_angl_max);
-        Serial.println("SET READ:EB_ANGL=" + brk_eb_angl);
-        Serial.println("SET READ:BRK_FULL_ANGL=" + brk_full_angl);
-        Serial.println("SET READ:BRK_MAX_ANGL=" + brk_max_angl);
-        Serial.println("SET READ:CHAT_FILTER=" + chat_filter);
+        Serial.print("SET READ:BRK_NUM=");
+        Serial.println(notch_brk_num);
+        Serial.print("SET READ:BRK_ANGL=");
+        Serial.println(brk_sap_angl);
+        Serial.print("SET READ:EB_ANGL=");
+        Serial.println(brk_eb_angl);
+        Serial.print("SET READ:BRK_FULL_ANGL=");
+        Serial.println(brk_full_angl);
+        Serial.print("SET READ:brk_sap_max_angl=");
+        Serial.println(brk_sap_max_angl);
+        Serial.print("SET READ:CHAT_FILTER=");
+        Serial.println(chat_filter);
       }
       //速度計設定読み出し
       i = strbve.indexOf("SPD_READ:");
@@ -598,47 +608,8 @@ void loop() {
       bve_current = strbve.substring(7, 12).toInt();
     }
 
-    //速度計のリミットを適用
-    if (bve_speed > (spd_limit * 10)) {
-      bve_speed = (spd_limit * 10);
-    }
-
-    //速度計補正
-    if (bve_speed < 100) {
-      dac.setVoltage(map(bve_speed, 0, 100, 0, spd_adj_010), false);
-    } else if (bve_speed < 200) {
-      dac.setVoltage(map(bve_speed, 100, 200, spd_adj_010, spd_adj_020), false);
-    } else if (bve_speed < 300) {
-      dac.setVoltage(map(bve_speed, 200, 300, spd_adj_020, spd_adj_030), false);
-    } else if (bve_speed < 400) {
-      dac.setVoltage(map(bve_speed, 300, 400, spd_adj_030, spd_adj_040), false);
-    } else if (bve_speed < 500) {
-      dac.setVoltage(map(bve_speed, 400, 500, spd_adj_040, spd_adj_050), false);
-    } else if (bve_speed < 600) {
-      dac.setVoltage(map(bve_speed, 500, 600, spd_adj_050, spd_adj_060), false);
-    } else if (bve_speed < 700) {
-      dac.setVoltage(map(bve_speed, 600, 700, spd_adj_060, spd_adj_070), false);
-    } else if (bve_speed < 800) {
-      dac.setVoltage(map(bve_speed, 700, 800, spd_adj_070, spd_adj_080), false);
-    } else if (bve_speed < 900) {
-      dac.setVoltage(map(bve_speed, 800, 900, spd_adj_080, spd_adj_090), false);
-    } else if (bve_speed < 1000) {
-      dac.setVoltage(map(bve_speed, 900, 1000, spd_adj_090, spd_adj_100), false);
-    } else if (bve_speed < 1100) {
-      dac.setVoltage(map(bve_speed, 1000, 1100, spd_adj_100, spd_adj_110), false);
-    } else if (bve_speed < 1200) {
-      dac.setVoltage(map(bve_speed, 1100, 1200, spd_adj_110, spd_adj_120), false);
-    } else if (bve_speed < 1300) {
-      dac.setVoltage(map(bve_speed, 1200, 1300, spd_adj_120, spd_adj_130), false);
-    } else if (bve_speed < 1400) {
-      dac.setVoltage(map(bve_speed, 1300, 1400, spd_adj_130, spd_adj_140), false);
-    } else if (bve_speed < 1500) {
-      dac.setVoltage(map(bve_speed, 1400, 1500, spd_adj_140, spd_adj_150), false);
-    } else if (bve_speed < 1600) {
-      dac.setVoltage(map(bve_speed, 1500, 1600, spd_adj_150, spd_adj_160), false);
-    } else {
-      dac.setVoltage(map(bve_speed, 1600, 1700, spd_adj_160, 4095), false);
-    }
+    //速度計表示補正
+    disp_SpeedMeter(bve_speed, spd_limit);
 
     //電流計
     if (!curr_kaisei && (bve_current < 0)) {
@@ -661,7 +632,7 @@ void loop() {
     //戸閉灯指示
     digitalWrite(8, !bve_door);
 
-    //Serial1デバッグ用
+    //Serial1転送
     Serial1.print(strbve);
     Serial1.print("\r");
 
@@ -842,8 +813,8 @@ void read_Break(void) {
   }
   if (abs(brk_angl - brk_angl_latch) >= chat_filter) {
     //直通帯位置
-    if (brk_angl < brk_max_angl) {
-      uint8_t temp_notch_brk = round(((float)brk_angl / (float)brk_max_angl) * ( (float) notch_brk_num - 0.5));
+    if (brk_angl < brk_sap_max_angl) {
+      uint8_t temp_notch_brk = round(((float)brk_angl / (float)brk_sap_max_angl) * ((float)notch_brk_num - 0.5));
       notch_brk = notch_brk_num + 1 - temp_notch_brk;
       //notch_brk = notch_brk_num - temp_notch_brk;
       if (notch_brk == notch_brk_num + 1) {
@@ -864,10 +835,7 @@ void read_Break(void) {
     brk_angl_latch = brk_angl;
   }
   if (mode_POT) {
-    Serial.print(" ");
-    Serial.print(notch_brk);
-
-    Serial.print(" ");
+    Serial.print(" Notch:");
     Serial.println(notch_brk_name);
   }
 
@@ -1262,4 +1230,49 @@ void read_EB(void) {
     }
   }
   EB_SW_latch = EB_SW;
+}
+
+void disp_SpeedMeter(uint16_t spd, uint16_t limit) {
+  //速度計のリミットを適用
+  if (spd > (limit * 10)) {
+    spd = (limit * 10);
+  }
+
+  //速度計表示補正
+  if (spd < 100) {
+    spd = map(spd, 0, 100, 0, spd_adj_010);
+  } else if (spd < 200) {
+    spd = map(spd, 100, 200, spd_adj_010, spd_adj_020);
+  } else if (spd < 300) {
+    spd = map(spd, 200, 300, spd_adj_020, spd_adj_030);
+  } else if (spd < 400) {
+    spd = map(spd, 300, 400, spd_adj_030, spd_adj_040);
+  } else if (spd < 500) {
+    spd = map(spd, 400, 500, spd_adj_040, spd_adj_050);
+  } else if (spd < 600) {
+    spd = map(spd, 500, 600, spd_adj_050, spd_adj_060);
+  } else if (spd < 700) {
+    spd = map(spd, 600, 700, spd_adj_060, spd_adj_070);
+  } else if (spd < 800) {
+    spd = map(spd, 700, 800, spd_adj_070, spd_adj_080);
+  } else if (spd < 900) {
+    spd = map(spd, 800, 900, spd_adj_080, spd_adj_090);
+  } else if (spd < 1000) {
+    spd = map(spd, 900, 1000, spd_adj_090, spd_adj_100);
+  } else if (spd < 1100) {
+    spd = map(spd, 1000, 1100, spd_adj_100, spd_adj_110);
+  } else if (spd < 1200) {
+    spd = map(spd, 1100, 1200, spd_adj_110, spd_adj_120);
+  } else if (spd < 1300) {
+    spd = map(spd, 1200, 1300, spd_adj_120, spd_adj_130);
+  } else if (spd < 1400) {
+    spd = map(spd, 1300, 1400, spd_adj_130, spd_adj_140);
+  } else if (spd < 1500) {
+    spd = map(spd, 1400, 1500, spd_adj_140, spd_adj_150);
+  } else if (spd < 1600) {
+    spd = map(spd, 1500, 1600, spd_adj_150, spd_adj_160);
+  } else {
+    spd = map(spd, 1600, 1700, spd_adj_160, 4095);
+  }
+  dac.setVoltage(spd, false);
 }
