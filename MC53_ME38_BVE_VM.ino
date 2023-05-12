@@ -855,7 +855,7 @@ void read_Break(void) {
 
     //N位置
     if ( brk_angl <= brk_sap_min_angl ){ 
-      notch_brk == notch_brk_num + 1;
+      notch_brk = notch_brk_num + 1;
       notch_brk_name = "N ";
     //直通帯位置
     } else if ( brk_angl < brk_sap_max_angl ) {
