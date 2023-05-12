@@ -25,6 +25,8 @@
 //MC53_ME38_BVE_VM_V3.6.3.3 速度調整修正、常用最大位置を設定可能とする(デフォルト67°)
 //MC53_ME38_BVE_VM_V3.6.3.4 速度計修正、微修正
 //MC53_ME38_BVE_VM_V3.6.3.5 ブレーキ弁調整モード
+//MC53_ME38_BVE_VM_V3.6.3.8 ブレーキ弁調整モード
+//MC53_ME38_BVE_VM_V3.6.3.9 直通帯最小位置を設定可能とする(デフォルト3°)
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -95,7 +97,8 @@ uint16_t brk_sap_angl = 80;      //直通帯の角度
 uint8_t notch_brk_num = 8;       //常用ブレーキ段数
 uint16_t brk_full_angl = 165;    //ブレーキ幅範囲
 uint16_t brk_eb_angl = 150;      //緩め位置に対して非常位置の角度
-uint16_t brk_sap_max_angl = 67;  //常用最大角度
+uint16_t brk_sap_max_angl = 67;  //直通帯最大角度
+uint16_t brk_sap_min_angl = 3;   //直通帯最小角度
 float brk_angl = 0;
 float brk_angl_latch = 0;
 //以上ブレーキ設定値
@@ -249,12 +252,11 @@ void setup() {
   if (EEPROM.get(52, vehicle_res) < 0) EEPROM.put(52, 500);
   if (EEPROM.get(54, chat_filter) < 0) EEPROM.put(54, 1);
   if (EEPROM.get(56, brk_sap_max_angl) < 0) EEPROM.put(54, 67);
+  if (EEPROM.get(58, brk_sap_min_angl) < 0) EEPROM.put(56, 3);
   //速度計テスト
   disp_SpeedMeter(spd_limit * 10, spd_limit);
-  dac2.setVoltage(map(curr_limit, 0, curr_limit, 0, 4095), false);
   delay(1500);
   disp_SpeedMeter(0, spd_limit);
-  dac2.setVoltage(0, false);
 }
 
 void loop() {
@@ -334,7 +336,7 @@ void loop() {
         }
         Serial.println(s);
       }
-      //常用最大角度
+      //直通帯最大角度
       i = strbve.indexOf("BRK_SAP_MAX_ANGL:");
       if (i > 0) {
         uint16_t num = strbve.substring(i + 17, i + 20).toInt();
@@ -345,6 +347,20 @@ void loop() {
           s = "SET OK:BRK_SAP_MAX_ANGL=";
           s += brk_sap_max_angl;
           EEPROM.put(56, brk_sap_max_angl);
+        }
+        Serial.println(s);
+      }
+      //直通帯最小角度
+      i = strbve.indexOf("BRK_SAP_MIN_ANGL:");
+      if (i > 0) {
+        uint16_t num = strbve.substring(i + 17, i + 20).toInt();
+        if (num == 0 || num > 270) {
+          s = "SET NG:BRK_SAP_MIN_ANGL";
+        } else {
+          brk_sap_min_angl = num;
+          s = "SET OK:BRK_SAP_MIN_ANGL=";
+          s += brk_sap_min_angl;
+          EEPROM.put(56, brk_sap_min_angl);
         }
         Serial.println(s);
       }
@@ -521,6 +537,8 @@ void loop() {
         Serial.println(brk_full_angl);
         Serial.print("SET READ:BRK_SAP_MAX_ANGL=");
         Serial.println(brk_sap_max_angl);
+        Serial.print("SET READ:BRK_SAP_MIN_ANGL=");
+        Serial.println(brk_sap_min_angl);
         Serial.print("SET READ:CHAT_FILTER=");
         Serial.println(chat_filter);
       }
@@ -834,22 +852,24 @@ void read_Break(void) {
     Serial.print(1000 + brk_angl);
   }
   if (abs(brk_angl - brk_angl_latch) >= chat_filter) {
+
+    //N位置
+    if ( brk_angl <= brk_sap_min_angl ){ 
+      notch_brk == notch_brk_num + 1;
+      notch_brk_name = "N ";
     //直通帯位置
-    if (brk_angl < brk_sap_max_angl) {
-      uint8_t temp_notch_brk = round(((float)brk_angl / (float)brk_sap_max_angl) * ((float)notch_brk_num - 0.5));
+    } else if ( brk_angl < brk_sap_max_angl ) {
+      uint8_t temp_notch_brk = round(( (float) brk_angl - (float) brk_sap_min_angl ) / ((float) (brk_sap_max_angl - (float) brk_sap_min_angl) * ((float)notch_brk_num - 1.0)) + 0.5 );
       notch_brk = notch_brk_num + 1 - temp_notch_brk;
-      //notch_brk = notch_brk_num - temp_notch_brk;
-      if (notch_brk == notch_brk_num + 1) {
-        notch_brk_name = "N ";
-      } else {
-        String s = String(temp_notch_brk);
-        notch_brk_name = "B" + s;
-      }
-      //常用最大位置～非常まで
-    } else if (brk_angl < brk_eb_angl) {
+      String s = String(temp_notch_brk);
+      notch_brk_name = "B" + s;
+      
+    //常用最大位置～非常まで
+    } else if ( brk_angl < brk_eb_angl ) {
       notch_brk = 1;
       notch_brk_name = "B" + String(notch_brk_num);
-      //非常位置
+      
+    //非常位置
     } else {
       notch_brk = 0;
       notch_brk_name = "EB";
