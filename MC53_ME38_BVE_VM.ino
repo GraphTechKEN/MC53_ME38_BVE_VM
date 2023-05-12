@@ -25,7 +25,7 @@
 //MC53_ME38_BVE_VM_V3.6.3.3 速度調整修正、常用最大位置を設定可能とする(デフォルト67°)
 //MC53_ME38_BVE_VM_V3.6.3.4 速度計修正、微修正
 //MC53_ME38_BVE_VM_V3.6.3.5 ブレーキ弁調整モード
-//MC53_ME38_BVE_VM_V3.6.3.8 ブレーキ弁調整モード
+//MC53_ME38_BVE_VM_V3.6.3.8 ブレーキ弁調整モード修正
 //MC53_ME38_BVE_VM_V3.6.3.9 直通帯最小位置を設定可能とする(デフォルト3°)
 
 #include <Adafruit_MCP23X17.h>
@@ -251,8 +251,8 @@ void setup() {
   if (EEPROM.get(50, curr_limit) < 0) EEPROM.put(50, 750);
   if (EEPROM.get(52, vehicle_res) < 0) EEPROM.put(52, 500);
   if (EEPROM.get(54, chat_filter) < 0) EEPROM.put(54, 1);
-  if (EEPROM.get(56, brk_sap_max_angl) < 0) EEPROM.put(54, 67);
-  if (EEPROM.get(58, brk_sap_min_angl) < 0) EEPROM.put(56, 3);
+  if (EEPROM.get(56, brk_sap_max_angl) < 0) EEPROM.put(56, 67);
+  if (EEPROM.get(58, brk_sap_min_angl) < 0) EEPROM.put(58, 3);
   //速度計テスト
   disp_SpeedMeter(spd_limit * 10, spd_limit);
   delay(1500);
@@ -360,7 +360,7 @@ void loop() {
           brk_sap_min_angl = num;
           s = "SET OK:BRK_SAP_MIN_ANGL=";
           s += brk_sap_min_angl;
-          EEPROM.put(56, brk_sap_min_angl);
+          EEPROM.put(58, brk_sap_min_angl);
         }
         Serial.println(s);
       }
