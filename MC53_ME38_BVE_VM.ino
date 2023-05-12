@@ -859,7 +859,7 @@ void read_Break(void) {
       notch_brk_name = "N ";
     //直通帯位置
     } else if ( brk_angl < brk_sap_max_angl ) {
-      uint8_t temp_notch_brk = round(( (float) brk_angl - (float) brk_sap_min_angl ) / ((float) (brk_sap_max_angl - (float) brk_sap_min_angl) * ((float)notch_brk_num - 1.0)) + 0.5 );
+      uint8_t temp_notch_brk = round ( ( (float) brk_angl - (float) brk_sap_min_angl ) / ((float) brk_sap_max_angl - (float) brk_sap_min_angl) * ( (float) notch_brk_num - 1.0) + 0.5 );
       notch_brk = notch_brk_num + 1 - temp_notch_brk;
       String s = String(temp_notch_brk);
       notch_brk_name = "B" + s;
