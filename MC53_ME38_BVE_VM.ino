@@ -1,4 +1,4 @@
-f//Arduino Micro または Leonard を使用してください
+//Arduino Micro または Leonard を使用してください
 
 //Adafruit MCP23017 Arduino Library を導入してください
 //Adafruit_MCP4725 Arduino Library を導入してください
