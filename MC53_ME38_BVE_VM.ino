@@ -1,4 +1,4 @@
-//Arduino Micro または Leonard を使用してください
+f//Arduino Micro または Leonard を使用してください
 
 //Adafruit MCP23017 Arduino Library を導入してください
 //Adafruit_MCP4725 Arduino Library を導入してください
@@ -1090,7 +1090,7 @@ void read_Break_Setting(void) {
   bool eb = (adcRead(6) < 512);
   if (n) {
     if (setMode_N == 0) {
-      adj_N = adc;
+      adj_N = adcRead(0);
       setMode_N = 1;
       iniMillis_N = millis();
       Serial.print("POT_N=");
@@ -1102,7 +1102,7 @@ void read_Break_Setting(void) {
         setMode_N = 2;
         //Serial.println("Mode_1");
       }
-      adj_N = adj_N * 0.9 + adc * 0.1;
+      adj_N = adj_N * 0.9 + adcRead(0) * 0.1;
       //Serial.println("Mode_1");
     } else if (setMode_N == 2) {
       setMode_N = 0;
@@ -1117,7 +1117,7 @@ void read_Break_Setting(void) {
 
   if (eb) {
     if (setMode_EB == 0) {
-      adj_EB = adc;
+      adj_EB = adcRead(0);
       setMode_EB = 1;
       iniMillis_EB = millis();
       Serial.print("POT_EB=");
@@ -1129,7 +1129,7 @@ void read_Break_Setting(void) {
         setMode_EB = 2;
         //Serial.println("Mode_1");
       }
-      adj_EB = adj_EB * 0.9 + adc * 0.1;
+      adj_EB = adj_EB * 0.9 + adcRead(0) * 0.1;
       //Serial.println("Mode_1");
     } else if (setMode_EB == 2) {
       setMode_EB = 0;
