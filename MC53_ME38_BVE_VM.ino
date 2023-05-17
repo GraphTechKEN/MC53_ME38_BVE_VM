@@ -491,57 +491,57 @@ void loop() {
     } else if (strbve.startsWith("RD ")) {
       //ブレーキ設定読み出し
       if (strbve.indexOf("BRK") > 0) {
-        Serial.print("SET READ: BRK_NUM = ");
+        Serial.print("SET READ:BRK_NUM=");
         Serial.println(notch_brk_num);
-        Serial.print("SET READ: BRK_ANGL = ");
+        Serial.print("SET READ:BRK_ANGL=");
         Serial.println(brk_sap_angl);
-        Serial.print("SET READ: EB_ANGL = ");
+        Serial.print("SET READ:EB_ANGL=");
         Serial.println(brk_eb_angl);
-        Serial.print("SET READ: BRK_FULL_ANGL = ");
+        Serial.print("SET READ:BRK_FULL_ANGL=");
         Serial.println(brk_full_angl);
-        Serial.print("SET READ: BRK_SAP_MAX_ANGL = ");
+        Serial.print("SET READ:BRK_SAP_MAX_ANGL=");
         Serial.println(brk_sap_max_angl);
-        Serial.print("SET READ: BRK_SAP_MIN_ANGL = ");
+        Serial.print("SET READ:BRK_SAP_MIN_ANGL=");
         Serial.println(brk_sap_min_angl);
-        Serial.print("SET READ: CHAT_FILTER = ");
+        Serial.print("SET READ:CHAT_FILTER=");
         Serial.println(chat_filter);
 
         //速度計設定読み出し
       } else if (strbve.indexOf("SPD") > 0) {
         Serial.println("SET READ: SPD");
-        Serial.print("010 = ");
+        Serial.print("010=");
         Serial.println(spd_adj_010);
-        Serial.print("020 = ");
+        Serial.print("020=");
         Serial.println(spd_adj_020);
-        Serial.print("030 = ");
+        Serial.print("030=");
         Serial.println(spd_adj_030);
-        Serial.print("040 = ");
+        Serial.print("040=");
         Serial.println(spd_adj_040);
-        Serial.print("050 = ");
+        Serial.print("050=");
         Serial.println(spd_adj_050);
-        Serial.print("060 = ");
+        Serial.print("060=");
         Serial.println(spd_adj_060);
-        Serial.print("070 = ");
+        Serial.print("070=");
         Serial.println(spd_adj_070);
-        Serial.print("080 = ");
+        Serial.print("080=");
         Serial.println(spd_adj_080);
-        Serial.print("090 = ");
+        Serial.print("090=");
         Serial.println(spd_adj_090);
-        Serial.print("100 = ");
+        Serial.print("100=");
         Serial.println(spd_adj_100);
-        Serial.print("110 = ");
+        Serial.print("110=");
         Serial.println(spd_adj_110);
-        Serial.print("120 = ");
+        Serial.print("120=");
         Serial.println(spd_adj_120);
-        Serial.print("130 = ");
+        Serial.print("130=");
         Serial.println(spd_adj_130);
-        Serial.print("140 = ");
+        Serial.print("140=");
         Serial.println(spd_adj_140);
-        Serial.print("150 = ");
+        Serial.print("150=");
         Serial.println(spd_adj_150);
-        Serial.print("160 = ");
+        Serial.print("160=");
         Serial.println(spd_adj_160);
-        Serial.print("Limit = ");
+        Serial.print("Limit=");
         Serial.println(spd_limit);
       } else {
         uint8_t nnn = 0;
