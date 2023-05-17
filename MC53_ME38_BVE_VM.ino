@@ -847,7 +847,9 @@ void read_Break(void) {
   //ポテンショ生データ表示モード
   if (mode_POT && !modeADJ) {
     Serial.print(" Notch: ");
-    Serial.println(notch_brk_name);
+    Serial.print(notch_brk_name);
+    Serial.print(" BP: ");
+    Serial.println(brk_bp_press);
   }
   //調整モード
   if (!mode_POT && modeADJ && adc != adc_latch) {
