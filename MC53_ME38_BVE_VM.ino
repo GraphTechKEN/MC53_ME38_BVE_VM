@@ -27,6 +27,8 @@
 //MC53_ME38_BVE_VM_V3.6.3.5 ブレーキ弁調整モード
 //MC53_ME38_BVE_VM_V3.6.3.8 ブレーキ弁調整モード修正
 //MC53_ME38_BVE_VM_V3.6.3.9 直通帯最小位置を設定可能とする(デフォルト3°)
+//MC53_ME38_BVE_VM_V3.7 簡易自動帯再現
+//MC53_ME38_BVE_VM_V4.0.0.0 コマンド番号化
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -88,6 +90,7 @@ uint8_t notch_mc_H_latch = 0;
 uint8_t mc_DEC_latch = 0;
 String notch_name = "";
 uint8_t notch_brk = 0;  //ブレーキノッチ
+uint8_t autoair_notch_brk = 0;
 uint8_t notch_brk_latch = 0;
 String notch_brk_name = "";
 //以下ブレーキ設定値
@@ -99,28 +102,30 @@ uint16_t brk_full_angl = 165;    //ブレーキ幅範囲
 uint16_t brk_eb_angl = 150;      //緩め位置に対して非常位置の角度
 uint16_t brk_sap_max_angl = 67;  //直通帯最大角度
 uint16_t brk_sap_min_angl = 3;   //直通帯最小角度
+uint16_t brk_keep_angl = 100;    //重なり位置
+uint16_t brk_bp_press = 490;     //BP管圧力
 float brk_angl = 0;
 float brk_angl_latch = 0;
 //以上ブレーキ設定値
 //以下速度計補正値
-uint16_t spd_adj_010 = 150;
-uint16_t spd_adj_020 = 400;
-uint16_t spd_adj_030 = 680;
-uint16_t spd_adj_040 = 1010;
-uint16_t spd_adj_050 = 1330;
-uint16_t spd_adj_060 = 1650;
-uint16_t spd_adj_070 = 2000;
-uint16_t spd_adj_080 = 2340;
-uint16_t spd_adj_090 = 2680;
-uint16_t spd_adj_100 = 3020;
-uint16_t spd_adj_110 = 3340;
-uint16_t spd_adj_120 = 3650;
-uint16_t spd_adj_130 = 4000;
-uint16_t spd_adj_140 = 4095;
-uint16_t spd_adj_150 = 4095;
-uint16_t spd_adj_160 = 4095;
+uint16_t spd_adj_010 = 150;       //12
+uint16_t spd_adj_020 = 400;       //14
+uint16_t spd_adj_030 = 680;       //16
+uint16_t spd_adj_040 = 1010;      //18
+uint16_t spd_adj_050 = 1330;      //20
+uint16_t spd_adj_060 = 1650;      //22
+uint16_t spd_adj_070 = 2000;      //24
+uint16_t spd_adj_080 = 2340;      //26
+uint16_t spd_adj_090 = 2680;      //28
+uint16_t spd_adj_100 = 3020;      //30
+uint16_t spd_adj_110 = 3340;      //32
+uint16_t spd_adj_120 = 3650;      //34
+uint16_t spd_adj_130 = 4000;      //36
+uint16_t spd_adj_140 = 4095;      //38
+uint16_t spd_adj_150 = 4095;      //40
+uint16_t spd_adj_160 = 4095;      //42
 
-uint16_t spd_limit = 120;
+uint16_t spd_limit = 120;         //44
 //以上速度計補正値
 
 int16_t bve_current = 0;
@@ -163,8 +168,10 @@ bool EB_SW_latch = 0;
 float adj_N = 0.0;
 float adj_EB = 0.0;
 
-uint16_t POT_N = 0;
-uint16_t POT_EB = 0;
+//以下ブレーキ位置調整用
+uint16_t POT_N = 0;               //00
+uint16_t POT_EB = 0;              //02
+//以上ブレーキ位置調整用
 
 unsigned long iniMillis_N = 0;
 unsigned long iniMillis_EB = 0;
@@ -223,36 +230,76 @@ void setup() {
     }
   }
 
-  if (EEPROM.get(0, POT_N) < 0) EEPROM.put(0, 0);
-  if (EEPROM.get(2, POT_EB) < 0) EEPROM.put(2, 512);
-  if (EEPROM.get(4, notch_brk_num) < 0) EEPROM.put(4, 8);
-  if (EEPROM.get(6, brk_sap_angl) < 0) EEPROM.put(6, 80);
-  if (EEPROM.get(8, brk_eb_angl) < 0) EEPROM.put(8, 150);
-  if (EEPROM.get(10, brk_full_angl) < 0) EEPROM.put(10, 165);
-  if (EEPROM.get(12, spd_adj_010) < 0) EEPROM.put(12, 150);
-  if (EEPROM.get(14, spd_adj_020) < 0) EEPROM.put(14, 400);
-  if (EEPROM.get(16, spd_adj_030) < 0) EEPROM.put(16, 680);
-  if (EEPROM.get(18, spd_adj_040) < 0) EEPROM.put(18, 1010);
-  if (EEPROM.get(20, spd_adj_050) < 0) EEPROM.put(20, 1330);
-  if (EEPROM.get(22, spd_adj_060) < 0) EEPROM.put(22, 1650);
-  if (EEPROM.get(24, spd_adj_070) < 0) EEPROM.put(24, 2000);
-  if (EEPROM.get(26, spd_adj_080) < 0) EEPROM.put(26, 2340);
-  if (EEPROM.get(28, spd_adj_090) < 0) EEPROM.put(28, 2680);
-  if (EEPROM.get(30, spd_adj_100) < 0) EEPROM.put(30, 3020);
-  if (EEPROM.get(32, spd_adj_110) < 0) EEPROM.put(32, 3340);
-  if (EEPROM.get(34, spd_adj_120) < 0) EEPROM.put(34, 3650);
-  if (EEPROM.get(36, spd_adj_130) < 0) EEPROM.put(36, 4000);
-  if (EEPROM.get(38, spd_adj_140) < 0) EEPROM.put(38, 4095);
-  if (EEPROM.get(40, spd_adj_150) < 0) EEPROM.put(40, 4095);
-  if (EEPROM.get(42, spd_adj_160) < 0) EEPROM.put(42, 4095);
-  if (EEPROM.get(44, spd_limit) < 0) EEPROM.put(44, 120);
-  if (EEPROM.get(46, curr_kaisei) < 0) EEPROM.put(46, 1);
-  if (EEPROM.get(48, curr_mode) < 0) EEPROM.put(48, 1);
-  if (EEPROM.get(50, curr_limit) < 0) EEPROM.put(50, 750);
-  if (EEPROM.get(52, vehicle_res) < 0) EEPROM.put(52, 500);
-  if (EEPROM.get(54, chat_filter) < 0) EEPROM.put(54, 1);
-  if (EEPROM.get(56, brk_sap_max_angl) < 0) EEPROM.put(56, 67);
-  if (EEPROM.get(58, brk_sap_min_angl) < 0) EEPROM.put(58, 3);
+  //初回書き込みチェック
+  bool b = 0;
+  if (EEPROM.get(100, b) == 0 ) {
+    EEPROM.put(0, 0);         //POT_N
+    EEPROM.put(2, 512);       //POT_EB
+    EEPROM.put(4, 8);         //ブレーキ段数設定
+    EEPROM.put(6, 80);        //直通帯範囲
+    EEPROM.put(8, 150);       //非常位置
+    EEPROM.put(10, 165);      //ブレーキ最大角度
+    EEPROM.put(12, 150);      //10km/h
+    EEPROM.put(14, 400);      //20km/h
+    EEPROM.put(16, 680);      //30km/h
+    EEPROM.put(18, 1010);     //40km/h
+    EEPROM.put(20, 1330);     //50km/h
+    EEPROM.put(22, 1650);     //60km/h
+    EEPROM.put(24, 2000);     //70km/h
+    EEPROM.put(26, 2340);     //80km/h
+    EEPROM.put(28, 2680);     //90km/h
+    EEPROM.put(30, 3020);     //100km/h
+    EEPROM.put(32, 3340);     //110km/h
+    EEPROM.put(34, 3650);     //120km/h
+    EEPROM.put(36, 4000);     //130km/h
+    EEPROM.put(38, 4095);     //140km/h
+    EEPROM.put(40, 4095);     //150km/h
+    EEPROM.put(42, 4095);     //160km/h
+    EEPROM.put(44, 120);      //速度計上限
+    EEPROM.put(46, 1);        //回生モード
+    EEPROM.put(48, 1);        //計器モード
+    EEPROM.put(50, 750);      //電流値上限
+    EEPROM.put(52, 500);      //列車抵抗
+    EEPROM.put(54, 1);        //チャタリング
+    EEPROM.put(56, 67);       //直通帯最大角度
+    EEPROM.put(58, 3);        //直通帯最小角度
+    EEPROM.put(60, 100);
+
+    //初回書き込みフラグセット
+    EEPROM.put(100, b);
+  } else {
+    EEPROM.get(0, POT_N);
+    EEPROM.get(2, POT_EB);
+    EEPROM.get(4, notch_brk_num);
+    EEPROM.get(6, brk_sap_angl);
+    EEPROM.get(8, brk_eb_angl);
+    EEPROM.get(10, brk_full_angl);
+    EEPROM.get(12, spd_adj_010);
+    EEPROM.get(14, spd_adj_020);
+    EEPROM.get(16, spd_adj_030);
+    EEPROM.get(18, spd_adj_040);
+    EEPROM.get(20, spd_adj_050);
+    EEPROM.get(22, spd_adj_060);
+    EEPROM.get(24, spd_adj_070);
+    EEPROM.get(26, spd_adj_080);
+    EEPROM.get(28, spd_adj_090);
+    EEPROM.get(30, spd_adj_100);
+    EEPROM.get(32, spd_adj_110);
+    EEPROM.get(34, spd_adj_120);
+    EEPROM.get(36, spd_adj_130);
+    EEPROM.get(38, spd_adj_140);
+    EEPROM.get(40, spd_adj_150);
+    EEPROM.get(42, spd_adj_160);
+    EEPROM.get(44, spd_limit);
+    EEPROM.get(46, curr_kaisei);
+    EEPROM.get(48, curr_mode);
+    EEPROM.get(50, curr_limit);
+    EEPROM.get(52, vehicle_res);
+    EEPROM.get(54, chat_filter);
+    EEPROM.get(56, brk_sap_max_angl);
+    EEPROM.get(58, brk_sap_min_angl);
+  }
+
   //速度計テスト
   disp_SpeedMeter(spd_limit * 10, spd_limit);
   delay(1500);
@@ -273,374 +320,275 @@ void loop() {
       Keyboard.print(str1.substring(4));
     }
     }*/
-  if (Serial.available() && modeBVE) {
+  if (Serial.available()) {
     strbve = Serial.readStringUntil('\r');
-    //シリアル設定モード
-    if (strbve.startsWith("SET")) {
+    uint8_t i = 0;
+    String s = "";
+    uint8_t device = strbve.substring(i + 4, i + 6).toInt();
+    uint16_t num = strbve.substring(i + 7, i + 12).toInt();
+
+    if (strbve.startsWith("WR ")) {
       //ブレーキ設定モード
-      //ブレーキ段数設定
-      int8_t i = 0;
-      String s = "";
-      i = strbve.indexOf("BRK_NUM:");
-      if (i > 0) {
-        uint16_t num = strbve.substring(i + 8, i + 10).toInt();
-        if (num == 0 || num > 50) {
-          s = "SET NG:BRK_NUM";
-        } else {
-          notch_brk_num = num;
-          s = "SET OK:BRK_NUM=";
-          s += notch_brk_num;
-          EEPROM.put(4, notch_brk_num);
-        }
-        Serial.println(s);
-      }
-      //直通帯範囲
-      i = strbve.indexOf("BRK_ANGL:");
-      if (i > 0) {
-        uint16_t num = strbve.substring(i + 9, i + 12).toInt();
-        if (num == 0 || num > brk_eb_angl) {
-          s = "SET NG:BRK_ANGL";
-        } else {
-          brk_sap_angl = num;
-          s = "SET OK:BRK_ANGL=";
-          s += brk_sap_angl;
-          EEPROM.put(6, brk_sap_angl);
-        }
-        Serial.println(s);
-      }
-      //非常位置
-      i = strbve.indexOf("EB_ANGL:");
-      if (i > 0) {
-        uint16_t num = strbve.substring(i + 8, i + 11).toInt();
-        if (num == 0 || num > brk_full_angl) {
-          s = "SET NG:EB_ANGL";
-        } else {
-          brk_eb_angl = num;
-          s = "SET OK:EB_ANGL=";
-          s += brk_eb_angl;
-          EEPROM.put(8, brk_eb_angl);
-        }
-        Serial.println(s);
-      }
-      //ブレーキ最大角度
-      i = strbve.indexOf("BRK_FULL_ANGL:");
-      if (i > 0) {
-        uint16_t num = strbve.substring(i + 14, i + 17).toInt();
-        if (num == 0 || num > 270) {
-          s = "SET NG:BRK_FULL_ANGL";
-        } else {
-          brk_full_angl = num;
-          s = "SET OK:BRK_FULL_ANGL=";
-          s += brk_full_angl;
-          EEPROM.put(10, brk_full_angl);
-        }
-        Serial.println(s);
-      }
-      //直通帯最大角度
-      i = strbve.indexOf("BRK_SAP_MAX_ANGL:");
-      if (i > 0) {
-        uint16_t num = strbve.substring(i + 17, i + 20).toInt();
-        if (num == 0 || num > 270) {
-          s = "SET NG:BRK_SAP_MAX_ANGL";
-        } else {
-          brk_sap_max_angl = num;
-          s = "SET OK:BRK_SAP_MAX_ANGL=";
-          s += brk_sap_max_angl;
-          EEPROM.put(56, brk_sap_max_angl);
-        }
-        Serial.println(s);
-      }
-      //直通帯最小角度
-      i = strbve.indexOf("BRK_SAP_MIN_ANGL:");
-      if (i > 0) {
-        uint16_t num = strbve.substring(i + 17, i + 20).toInt();
-        if (num == 0 || num > 270) {
-          s = "SET NG:BRK_SAP_MIN_ANGL";
-        } else {
-          brk_sap_min_angl = num;
-          s = "SET OK:BRK_SAP_MIN_ANGL=";
-          s += brk_sap_min_angl;
-          EEPROM.put(58, brk_sap_min_angl);
-        }
-        Serial.println(s);
-      }
-      //速度計調整
-      i = strbve.indexOf("SPD_");
-      if (i > 0) {
-        String strspd = strbve.substring(i + 4, i + 7);
-        uint16_t spd = strspd.toInt();
-        uint16_t num = strbve.substring(i + 8, i + 12).toInt();
-        if (num == 0) {
-          s = "SET NG:SPD_" + strspd;
-        } else {
-          s = "SET OK:SPD_" + strspd + "=";
-          bve_speed = spd * 10;
-          switch (spd) {
-            case 10:
-              spd_adj_010 = num;
-              s += spd_adj_010;
-              EEPROM.put(12, spd_adj_010);
-              break;
-            case 20:
-              spd_adj_020 = num;
-              s += spd_adj_020;
-              EEPROM.put(14, spd_adj_020);
-              break;
-            case 30:
-              spd_adj_030 = num;
-              s += spd_adj_030;
-              EEPROM.put(16, spd_adj_030);
-              break;
-            case 40:
-              spd_adj_040 = num;
-              s += spd_adj_040;
-              EEPROM.put(18, spd_adj_040);
-              break;
-            case 50:
-              spd_adj_050 = num;
-              s += spd_adj_050;
-              EEPROM.put(20, spd_adj_050);
-              break;
-            case 60:
-              spd_adj_060 = num;
-              s += spd_adj_060;
-              EEPROM.put(22, spd_adj_060);
-              break;
-            case 70:
-              spd_adj_070 = num;
-              s += spd_adj_070;
-              EEPROM.put(24, spd_adj_070);
-              break;
-            case 80:
-              spd_adj_080 = num;
-              s += spd_adj_080;
-              EEPROM.put(26, spd_adj_080);
-              break;
-            case 90:
-              spd_adj_090 = num;
-              s += spd_adj_090;
-              EEPROM.put(28, spd_adj_090);
-              break;
-            case 100:
-              spd_adj_100 = num;
-              s += spd_adj_100;
-              EEPROM.put(30, spd_adj_100);
-              break;
-            case 110:
-              spd_adj_110 = num;
-              s += spd_adj_110;
-              EEPROM.put(32, spd_adj_110);
-              break;
-            case 120:
-              spd_adj_120 = num;
-              s += spd_adj_120;
-              EEPROM.put(34, spd_adj_120);
-              break;
-            case 130:
-              spd_adj_130 = num;
-              s += spd_adj_130;
-              EEPROM.put(36, spd_adj_130);
-              break;
-            case 140:
-              spd_adj_140 = num;
-              s += spd_adj_140;
-              EEPROM.put(38, spd_adj_140);
-              break;
-            case 150:
-              spd_adj_150 = num;
-              s += spd_adj_150;
-              EEPROM.put(40, spd_adj_150);
-              break;
-            case 160:
-              spd_adj_160 = num;
-              s += spd_adj_160;
-              EEPROM.put(42, spd_adj_160);
-              break;
-              //default:
-          }
-        }
-        Serial.println(s);
-      }
 
-      //回生モード
-      i = strbve.indexOf("CURR_KAISEI:");
-      if (i > 0) {
-        int8_t on = strbve.indexOf("ON");
-        int8_t off = strbve.indexOf("OFF");
-        if (on < 0 && off < 0) {
-          Serial.println("SET NG:CURR_KAISEI");
-        } else {
-          if (on > 0) {
-            curr_kaisei = 1;
-            Serial.println("SET OK:CURR_KAISEI:ON");
-          } else {
-            curr_kaisei = 0;
-            Serial.println("SET OK:CURR_KAISEI:OFF");
-          }
-          EEPROM.put(46, curr_kaisei);
-        }
-      }
-      //計器モード
-      i = strbve.indexOf("CURR_MODE:");
-      if (i > 0) {
-        int8_t V = strbve.indexOf("V");
-        int8_t I = strbve.indexOf("I");
-        if (V < 0 && I < 0) {
-          Serial.println("SET NG:CURR_MODE");
-        } else {
-          if (V > 0) {
-            curr_mode = 1;
-            Serial.println("SET OK:CURR_MODE:V");
-          } else {
-            curr_mode = 0;
-            Serial.println("SET OK:CURR_MODE:I");
-          }
-          EEPROM.put(48, curr_mode);
-        }
-      }
+      switch (device) {
 
-      //列車抵抗
-      i = strbve.indexOf("VEHICLE_RES:");
-      if (i > 0) {
-        uint16_t num = strbve.substring(i + 12, i + 16).toInt();
-        if (num == 0) {
-          Serial.println("SET NG:VEHICLE_RES");
-        } else {
-          vehicle_res = num;
-          Serial.println("SET OK:VEHICLE_RES=" + vehicle_res);
-          EEPROM.put(52, vehicle_res);
-        }
+        //ブレーキ段数設定
+        case 4:
+          if (num == 0 || num > 255) {
+            s = "E1 004";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t) &notch_brk_num, true);
+          }
+          break;
+
+        //直通帯範囲
+        case 6:
+          if (num == 0 || num > brk_eb_angl) {
+            s = "E1 006";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t) &brk_sap_angl, true);
+          }
+          break;
+
+        //非常位置
+        case 8:
+          if (num == 0 || num > brk_full_angl) {
+            s = "E1 008";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t) &brk_eb_angl, true);
+          }
+          break;
+
+        //ブレーキ最大角度
+        case 10:
+          if (num == 0 || num > 255) {
+            s = "E1 010";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t) &brk_full_angl, true);
+          }
+          break;
+
+        //常用最大角度
+        case 56:
+          if (num == 0 || num > brk_sap_angl) {
+            s = "E1 056";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t) &brk_sap_max_angl, true);
+          }
+          break;
+
+        //直通帯最小角度
+        case 58:
+          if (num == 0 || num > brk_sap_max_angl) {
+            s = "E1 058";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t) &brk_sap_min_angl, true);
+          }
+          break;
+
+        //速度計調整
+        case 12:
+          s = rw_eeprom(device, &num, &spd_adj_010, true);
+          break;
+        case 14:
+          s = rw_eeprom(device, &num, &spd_adj_020, true);
+          break;
+        case 16:
+          s = rw_eeprom(device, &num, &spd_adj_030, true);
+          break;
+        case 18:
+          s = rw_eeprom(device, &num, &spd_adj_040, true);
+          break;
+        case 20:
+          s = rw_eeprom(device, &num, &spd_adj_050, true);
+          break;
+        case 22:
+          s = rw_eeprom(device, &num, &spd_adj_060, true);
+          break;
+        case 24:
+          s = rw_eeprom(device, &num, &spd_adj_070, true);
+          break;
+        case 26:
+          s = rw_eeprom(device, &num, &spd_adj_080, true);
+          break;
+        case 28:
+          s = rw_eeprom(device, &num, &spd_adj_090, true);
+          break;
+        case 30:
+          s = rw_eeprom(device, &num, &spd_adj_100, true);
+          break;
+        case 32:
+          s = rw_eeprom(device, &num, &spd_adj_110, true);
+          break;
+        case 34:
+          s = rw_eeprom(device, &num, &spd_adj_120, true);
+          break;
+        case 36:
+          s = rw_eeprom(device, &num, &spd_adj_130, true);
+          break;
+        case 38:
+          s = rw_eeprom(device, &num, &spd_adj_140, true);
+          break;
+        case 40:
+          s = rw_eeprom(device, &num, &spd_adj_150, true);
+          break;
+        case 42:
+          s = rw_eeprom(device, &num, &spd_adj_160, true);
+          break;
+
+        //最高速度設定
+        case 44:
+          if (num == 0) {
+            s = "E1 044";
+          } else {
+            bve_speed = num * 10;
+            s = rw_eeprom(device, &num, &spd_limit, true);
+          }
+          break;
+
+        //回生モード
+        case 46:
+          if (num > 1) {
+            s = "E1 046";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t) &curr_kaisei, true);
+          }
+          break;
+
+        //計器モード
+        case 48:
+          if (num > 1) {
+            s = "E1 048";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t) &curr_mode, true);
+          }
+          break;
+
+        //列車抵抗
+        case 52:
+          if (num == 0) {
+            s = "E1 052";
+          } else {
+            s = rw_eeprom(device, &num, &vehicle_res, true);
+          }
+          break;
+
+        //チャタリング
+        case 54:
+          if (num < 0) {
+            s = "SET NG: CHAT_FILTER";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t) &chat_filter, true);
+          }
+
+        default:
+          s = "E0";
+          break;
+
       }
-      //最高速度設定
-      i = strbve.indexOf("SPD_LIMIT:");
-      if (i > 0) {
-        uint16_t num = strbve.substring(i + 10, i + 13).toInt();
-        if (num == 0) {
-          Serial.println("SET NG:SPD_LIMIT");
-        } else {
-          spd_limit = num;
-          Serial.println("SET OK:SPD_LIMIT=" + spd_limit);
-          EEPROM.put(44, spd_limit);
-          bve_speed = spd_limit * 10;
-        }
-      }
+      Serial.println(s);
+
+    } else if (strbve.startsWith("RD ")) {
       //ブレーキ設定読み出し
-      i = strbve.indexOf("BRK_READ:");
-      if (i > 0) {
-        Serial.print("SET READ:BRK_NUM=");
+      if (strbve.indexOf("BRK") > 0) {
+        Serial.print("SET READ: BRK_NUM = ");
         Serial.println(notch_brk_num);
-        Serial.print("SET READ:BRK_ANGL=");
+        Serial.print("SET READ: BRK_ANGL = ");
         Serial.println(brk_sap_angl);
-        Serial.print("SET READ:EB_ANGL=");
+        Serial.print("SET READ: EB_ANGL = ");
         Serial.println(brk_eb_angl);
-        Serial.print("SET READ:BRK_FULL_ANGL=");
+        Serial.print("SET READ: BRK_FULL_ANGL = ");
         Serial.println(brk_full_angl);
-        Serial.print("SET READ:BRK_SAP_MAX_ANGL=");
+        Serial.print("SET READ: BRK_SAP_MAX_ANGL = ");
         Serial.println(brk_sap_max_angl);
-        Serial.print("SET READ:BRK_SAP_MIN_ANGL=");
+        Serial.print("SET READ: BRK_SAP_MIN_ANGL = ");
         Serial.println(brk_sap_min_angl);
-        Serial.print("SET READ:CHAT_FILTER=");
+        Serial.print("SET READ: CHAT_FILTER = ");
         Serial.println(chat_filter);
-      }
-      //速度計設定読み出し
-      i = strbve.indexOf("SPD_READ:");
-      if (i > 0) {
-        Serial.println("SET READ:SPD");
-        Serial.print("010=");
+
+        //速度計設定読み出し
+      } else if (strbve.indexOf("SPD") > 0) {
+        Serial.println("SET READ: SPD");
+        Serial.print("010 = ");
         Serial.println(spd_adj_010);
-        Serial.print("020=");
+        Serial.print("020 = ");
         Serial.println(spd_adj_020);
-        Serial.print("030=");
+        Serial.print("030 = ");
         Serial.println(spd_adj_030);
-        Serial.print("040=");
+        Serial.print("040 = ");
         Serial.println(spd_adj_040);
-        Serial.print("050=");
+        Serial.print("050 = ");
         Serial.println(spd_adj_050);
-        Serial.print("060=");
+        Serial.print("060 = ");
         Serial.println(spd_adj_060);
-        Serial.print("070=");
+        Serial.print("070 = ");
         Serial.println(spd_adj_070);
-        Serial.print("080=");
+        Serial.print("080 = ");
         Serial.println(spd_adj_080);
-        Serial.print("090=");
+        Serial.print("090 = ");
         Serial.println(spd_adj_090);
-        Serial.print("100=");
+        Serial.print("100 = ");
         Serial.println(spd_adj_100);
-        Serial.print("110=");
+        Serial.print("110 = ");
         Serial.println(spd_adj_110);
-        Serial.print("120=");
+        Serial.print("120 = ");
         Serial.println(spd_adj_120);
-        Serial.print("130=");
+        Serial.print("130 = ");
         Serial.println(spd_adj_130);
-        Serial.print("140=");
+        Serial.print("140 = ");
         Serial.println(spd_adj_140);
-        Serial.print("150=");
+        Serial.print("150 = ");
         Serial.println(spd_adj_150);
-        Serial.print("160=");
+        Serial.print("160 = ");
         Serial.println(spd_adj_160);
-        Serial.print("Limit=");
+        Serial.print("Limit = ");
         Serial.println(spd_limit);
+      } else {
+        uint8_t nnn = 0;
+        Serial.println(rw_eeprom(device, 0, (uint16_t) &nnn, false));
       }
+
+    } else if (strbve.startsWith("MD ")) {
       //模型モード
-      i = strbve.indexOf("MODE_N:");
-      if (i > 0) {
-        int8_t on = strbve.indexOf("ON");
-        int8_t off = strbve.indexOf("OFF");
-        if (on < 0 && off < 0) {
-          Serial.println("SET NG");
-        } else if (on > 0 && off < 0) {
+      if (strbve.indexOf("N   ") > 0 ) {
+        s = "OK N   ";
+        if (num) {
           modeN = true;
           notch_brk_num = 8;
-          Serial.println("SET OK:MODE_N:ON");
+          s += "ON";
         } else {
           modeN = false;
-          Serial.println("SET OK:MODE_N:OFF");
+          s += "OFF";
         }
       }
+
       //ブレーキ弁調整モード
-      i = strbve.indexOf("MODE_ADJ:");
-      if (i > 0) {
-        int8_t on = strbve.indexOf("ON");
-        int8_t off = strbve.indexOf("OFF");
-        if (on < 0 && off < 0) {
-          Serial.println("SET NG");
-        } else if (on > 0 && off < 0) {
+      else if (strbve.indexOf("ADJ ") > 0 ) {
+        s = "OK ADJ ";
+        if (num) {
           modeADJ = true;
-          Serial.println("SET OK:MODE_ADJ:ON");
+          s += "ON";
         } else {
           modeADJ = false;
-          Serial.println("SET OK:MODE_ADJ:OFF");
+          s += "OFF";
         }
       }
-      //チャタリング
-      i = strbve.indexOf("CHAT_FILTER:");
-      if (i > 0) {
-        uint8_t num = strbve.substring(i + 12, i + 13).toInt();
-        if (num < 0) {
-          s = "SET NG:CHAT_FILTER";
-        } else {
-          chat_filter = num;
-          s = "SET OK:CHAT_FILTER=";
-          s += chat_filter;
-          EEPROM.put(54, chat_filter);
-        }
-        Serial.println(s);
-      }
+
       //ポテンショ読取モード
-      i = strbve.indexOf("POT_MODE:");
-      if (i > 0) {
-        int8_t on = strbve.indexOf("ON");
-        int8_t off = strbve.indexOf("OFF");
-        if (on < 0 && off < 0) {
-          Serial.println("SET NG");
-        } else if (on > 0 && off < 0) {
+      else if (strbve.indexOf("POT ") > 0 ) {
+        s = "OK POT ";
+        if (num) {
           mode_POT = true;
-          Serial.println("SET OK:POT_MODE:ON");
+          s += "ON";
         } else {
           mode_POT = false;
-          Serial.println("SET OK:POT_MODE:OFF");
+          s += "OFF";
         }
+      } else {
+        s = "E0";
       }
+      Serial.println(s);
+
     } else {
       //通常モード：速度抽出
       bve_speed = strbve.substring(0, 4).toInt();
@@ -648,6 +596,22 @@ void loop() {
       bve_current = strbve.substring(7, 12).toInt();
     }
 
+    //電流計
+    if (!curr_kaisei && (bve_current < 0)) {
+      bve_current = 0;
+    }
+    if (curr_mode) {
+      uint16_t v = 1500 - (bve_current * (vehicle_res / 1000.0));
+      if (v > 2000) {
+        v = 2000;
+      }
+    } else {
+      int current = abs(bve_current);
+      if (current > curr_limit) {
+        current = curr_limit;
+      }
+    }
+    
     //速度計表示補正
     disp_SpeedMeter(bve_speed, spd_limit);
 
@@ -677,9 +641,9 @@ void loop() {
     Serial1.print("\r");
 
     /*2022-07-23 解除
-      Serial1.print("BVE Speed:");
+      Serial1.print("BVE Speed: ");
       Serial1.println(bve_speed);
-      Serial1.print(" Door:");
+      Serial1.print(" Door: ");
       Serial1.println(bve_door);
     */
   }
@@ -709,7 +673,7 @@ void loop() {
   Serial.print(notch_name);
   Serial.print(" ");
   Serial.print(notch_brk_name);
-  Serial.print(" Dir:");
+  Serial.print(" Dir: ");
   Serial.print(strDir);
   Serial.println();
 #endif
@@ -806,13 +770,13 @@ void read_MC(void) {
       }
     }
 #ifdef DEBUG
-    Serial.print(" mc:");
+    Serial.print(" mc: ");
     Serial.print(notch_mc);
-    Serial.print(" mc_latch:");
+    Serial.print(" mc_latch: ");
     Serial.println(notch_mc_latch);
-    Serial.print(" mc_H:");
+    Serial.print(" mc_H: ");
     Serial.print(notch_mc_H);
-    Serial.print(" mc_H_latch:");
+    Serial.print(" mc_H_latch: ");
     Serial.println(notch_mc_H_latch);
 #endif
   }
@@ -846,46 +810,50 @@ void read_Break(void) {
   brk_angl = map(adc, POT_N, POT_EB, 0, brk_full_angl * 100) / 100.0;
 
   if (mode_POT && !modeADJ) {
-    Serial.print(" Pot1:");
+    Serial.print(" Pot1: ");
     Serial.print(10000 + adc);
-    Serial.print(" Deg:");
+    Serial.print(" Deg: ");
     Serial.print(1000 + brk_angl);
   }
   if (abs(brk_angl - brk_angl_latch) >= chat_filter) {
 
     //N位置
-    if ( brk_angl <= brk_sap_min_angl ){ 
+    if ( brk_angl <= brk_sap_min_angl ) {
       notch_brk = notch_brk_num + 1;
       notch_brk_name = "N ";
-    //直通帯位置
+      //直通帯位置
     } else if ( brk_angl < brk_sap_max_angl ) {
       uint8_t temp_notch_brk = round ( ( (float) brk_angl - (float) brk_sap_min_angl ) / ((float) brk_sap_max_angl - (float) brk_sap_min_angl) * ( (float) notch_brk_num - 1.0) + 0.5 );
       notch_brk = notch_brk_num + 1 - temp_notch_brk;
       String s = String(temp_notch_brk);
       notch_brk_name = "B" + s;
-      
-    //常用最大位置～非常まで
-    } else if ( brk_angl < brk_eb_angl ) {
+
+      //常用最大位置～直通帯範囲まで
+    } else if ( brk_angl < brk_sap_angl ) {
       notch_brk = 1;
       notch_brk_name = "B" + String(notch_brk_num);
-      
-    //非常位置
+
+      //自動帯
+    } else if ( brk_angl < brk_eb_angl ) {
+
+      //非常位置以降
     } else {
       notch_brk = 0;
       notch_brk_name = "EB";
     }
     brk_angl_latch = brk_angl;
   }
+  BP(brk_angl);
   //ポテンショ生データ表示モード
   if (mode_POT && !modeADJ) {
-    Serial.print(" Notch:");
+    Serial.print(" Notch: ");
     Serial.println(notch_brk_name);
   }
   //調整モード
   if (!mode_POT && modeADJ && adc != adc_latch) {
-    Serial.print("ADC:");
+    Serial.print("ADC: ");
     Serial.print(10000 + adc);
-    Serial.print(" DEG:");
+    Serial.print(" DEG: ");
     Serial.print(1000 + brk_angl);
     Serial.print(" ");
     Serial.println(notch_brk_name);
@@ -897,22 +865,22 @@ void read_Break(void) {
   bool sw = 0;
   if (adcRead(1) < 512) sw = 0;
   else sw = 1;
-  Serial.print(" SW1:");
+  Serial.print(" SW1: ");
   Serial.print(sw);
 
   if (adcRead(2) < 512) sw = 0;
   else sw = 1;
-  Serial.print(" SW2:");
+  Serial.print(" SW2: ");
   Serial.print(sw);
 
   if (adcRead(3) < 512) sw = 0;
   else sw = 1;
-  Serial.print(" SW3:");
+  Serial.print(" SW3: ");
   Serial.print(sw);
 
   if (adcRead(4) < 512) sw = 0;
   else sw = 1;
-  Serial.print(" SW4:");
+  Serial.print(" SW4: ");
   Serial.print(sw);
 #endif
 }
@@ -924,18 +892,18 @@ void keyboard_control(void) {
     if (modeBVE) {
       uint8_t d = abs(notch_mc - notch_mc_latch);
 #ifdef DEBUG
-      Serial.print(" notch_mc:");
+      Serial.print(" notch_mc: ");
       Serial.print(notch_mc);
-      Serial.print(" notch_mc-notch_mc_latch:");
+      Serial.print(" notch_mc - notch_mc_latch: ");
       Serial.print(d);
-      Serial.print(" Key:");
+      Serial.print(" Key: ");
 #endif
       //力行ノッチ
       if (notch_mc >= 50 && notch_mc_latch >= 50 && notch_mc <= 55 && notch_mc_latch <= 55) {
         //進段
         if ((notch_mc - notch_mc_latch) > 0) {
           for (uint8_t i = 0; i < d; i++) {
-            Keyboard.write(0x5A);  //"/"
+            Keyboard.write(0x5A);  //" / "
 #ifdef DEBUG
             Serial.println("Z");
 #endif
@@ -944,7 +912,7 @@ void keyboard_control(void) {
         //戻し
         if ((notch_mc - notch_mc_latch) < 0) {
           for (uint8_t i = 0; i < d; i++) {
-            Keyboard.write(0x41);  //"/"
+            Keyboard.write(0x41);  //" / "
 #ifdef DEBUG
             Serial.println("A");
 #endif
@@ -968,7 +936,7 @@ void keyboard_control(void) {
         //進段
         if ((notch_mc_H - notch_mc_H_latch) > 0) {
           for (uint8_t i = 0; i < d; i++) {
-            Keyboard.write(0x51);  //"/"
+            Keyboard.write(0x51);  //" / "
 #ifdef DEBUG
             Serial.println("Q");
 #endif
@@ -977,7 +945,7 @@ void keyboard_control(void) {
         //戻し
         if ((notch_mc_H - notch_mc_H_latch) < 0) {
           for (uint8_t i = 0; i < d; i++) {
-            Keyboard.write(0x41);  //"/"
+            Keyboard.write(0x41);  //" / "
 #ifdef DEBUG
             Serial.println("A");
 #endif
@@ -1004,20 +972,20 @@ void keyboard_control(void) {
     if (modeBVE && !modeADJ && !modeN) {
       uint8_t d = abs(notch_brk - notch_brk_latch);
 #ifdef DEBUG
-      Serial.print(" notch_brk:");
+      Serial.print(" notch_brk: ");
       Serial.print(notch_brk);
-      Serial.print(" notch_brk-notch_brk_latch:");
+      Serial.print(" notch_brk - notch_brk_latch: ");
       Serial.print(d);
-      Serial.print(" Key:");
+      Serial.print(" Key: ");
 #endif
       //ブレーキノッチ
       if (notch_brk <= (notch_brk_num + 1) && notch_brk_latch <= (notch_brk_num + 1) && notch_brk > 0) {
         //戻し
         if ((notch_brk - notch_brk_latch) > 0) {
           for (uint8_t i = 0; i < d; i++) {
-            Keyboard.write(0x2C);  //","
+            Keyboard.write(0x2C);  //", "
 #ifdef DEBUG
-            Serial.println(",");
+            Serial.println(", ");
 #endif
           }
         }
@@ -1032,9 +1000,9 @@ void keyboard_control(void) {
         }
       }
       if (notch_brk == 0) {
-        Keyboard.write(0x2F);  //"/"
+        Keyboard.write(0x2F);  //" / "
 #ifdef DEBUG
-        Serial.println("/");
+        Serial.println(" / ");
 #endif
       }
     }
@@ -1048,7 +1016,7 @@ void keyboard_control(void) {
     if (modeBVE) {
       uint8_t d = abs(iDir - iDir_latch);
 #ifdef DEBUG
-      Serial.print(" iDir:");
+      Serial.print(" iDir: ");
       Serial.print(iDir);
 #endif
       //前進
@@ -1093,9 +1061,9 @@ void read_Break_Setting(void) {
       adj_N = adcRead(0);
       setMode_N = 1;
       iniMillis_N = millis();
-      Serial.print("POT_N=");
+      Serial.print("POT_N = ");
       Serial.print(EEPROM.get(0, value));
-      Serial.print(" ADC=");
+      Serial.print(" ADC = ");
       Serial.println(adj_N);
     } else if (setMode_N == 1) {
       if (millis() - iniMillis_N > 3000) {
@@ -1108,7 +1076,7 @@ void read_Break_Setting(void) {
       setMode_N = 0;
       POT_N = (uint16_t)adj_N;
       EEPROM.put(0, POT_N);
-      Serial.print("NEW POT_N=");
+      Serial.print("NEW POT_N = ");
       Serial.println(POT_N);
     }
   } else {
@@ -1120,9 +1088,9 @@ void read_Break_Setting(void) {
       adj_EB = adcRead(0);
       setMode_EB = 1;
       iniMillis_EB = millis();
-      Serial.print("POT_EB=");
+      Serial.print("POT_EB = ");
       Serial.print(EEPROM.get(2, value));
-      Serial.print(" ADC=");
+      Serial.print(" ADC = ");
       Serial.println(adj_EB);
     } else if (setMode_EB == 1) {
       if (millis() - iniMillis_EB > 3000) {
@@ -1135,7 +1103,7 @@ void read_Break_Setting(void) {
       setMode_EB = 0;
       POT_EB = (uint16_t)adj_EB;
       EEPROM.put(2, POT_EB);
-      Serial.print("NEW POT_EB=");
+      Serial.print("NEW POT_EB = ");
       Serial.println(POT_EB);
     }
   } else {
@@ -1250,7 +1218,7 @@ void read_Light_Def(void) {
     {
     modeBVE = Light_Def;
     if (!Light_Def) {
-      notch_brk_num = 8;
+    notch_brk_num = 8;
     }
     }
     Light_Def_latch = Light_Def;*/
@@ -1262,7 +1230,7 @@ void read_Light(void) {
     {
     modeBVE = Light_On;
     if (!Light_On) {
-      notch_brk_num = 8;
+    notch_brk_num = 8;
     }
     }
     Light_On_latch = Light_On;*/
@@ -1328,4 +1296,53 @@ void disp_SpeedMeter(uint16_t spd, uint16_t limit) {
     spd = map(spd, 1600, 1700, spd_adj_160, 4095);
   }
   dac.setVoltage(spd, false);
+}
+
+void BP (uint16_t angl ) {
+  //直通帯(運転位置)でBP圧を加圧
+  if ( angl < brk_sap_angl ) {
+    brk_bp_press++ ;
+    if (brk_bp_press > 490 ) {
+      brk_bp_press = 490;
+    }
+    //重なり位置でBP圧は維持
+  } else if ( brk_angl < brk_keep_angl ) {
+
+    //常用位置でBP圧を減圧
+  } else if ( brk_angl < brk_eb_angl ) {
+    brk_bp_press--;
+    if ( brk_bp_press < 0 ) {
+      brk_bp_press = 0;
+    }
+  }
+
+  //自動帯でのBC圧をBP圧より生成
+  uint16_t autoair_bc_press = ( 490 - brk_bp_press ) * 2.5 ;
+  if ( autoair_bc_press > 440 ) {
+    autoair_bc_press = 440;
+  }
+
+  //BC圧からブレーキノッチに変換
+  autoair_notch_brk = map(autoair_bc_press, 0, 440, 0, notch_brk_num);
+}
+
+String rw_eeprom (uint8_t dev, uint16_t *n, int *param, bool write) {
+  if (write) {
+    *param = *n;
+    EEPROM.put(dev, *param);
+  } else {
+    EEPROM.get(dev, *param);
+  }
+  String s = "OK ";
+  if (dev < 100) {
+    s += "0";
+  }
+  if (dev < 10) {
+    s += "0";
+  }
+  s += dev;
+  s += " ";
+  s += *param;
+
+  return s;
 }
