@@ -858,7 +858,7 @@ void read_Break(void) {
       //常用最大位置～直通帯範囲まで
     } else if (brk_angl < brk_sap_angl) {
       notch_brk = 1;
-      notch_brk_name = "B" + notch_brk_num;
+      notch_brk_name = "B" + String(notch_brk_num);
 
       //自動帯
     } else if (brk_angl < brk_eb_angl) {
