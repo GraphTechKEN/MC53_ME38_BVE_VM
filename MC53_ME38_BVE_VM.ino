@@ -29,6 +29,7 @@
 //MC53_ME38_BVE_VM_V3.6.3.9 直通帯最小位置を設定可能とする(デフォルト3°)
 //MC53_ME38_BVE_VM_V3.7 簡易自動帯再現
 //MC53_ME38_BVE_VM_V4.0.0.0 コマンド番号化
+//MC53_ME38_BVE_VM_V4.1.0.0 自動帯を追加
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
