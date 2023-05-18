@@ -878,13 +878,6 @@ void read_Break(void) {
   }else if (brk_angl >= brk_keep_angl || brk_angl < brk_keep_full_angl) {
     bp_span = map(brk_angl, brk_keep_angl, brk_keep_full_angl, 100, 20);
   }
-  Serial.print(brk_angl);
-  Serial.print(" ");
-  Serial.print(brk_keep_angl);
-  Serial.print(" ");
-  Serial.print(brk_keep_full_angl);
-  Serial.print(" ");
-  Serial.println(bp_span);
   BP(brk_angl);
 
   //自動帯圧力優先シーケンス
