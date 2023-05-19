@@ -31,6 +31,7 @@
 //MC53_ME38_BVE_VM_V4.0.0.0 コマンド番号化
 //MC53_ME38_BVE_VM_V4.1.0.0 自動帯を追加
 //MC53_ME38_BVE_VM_V4.1.0.1 速度計調整時速度計が動かないバグ修正
+//MC53_ME38_BVE_VM_V4.1.0.2 BPの増減圧インターバルを追加
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -205,6 +206,8 @@ bool modeADJ = false;
 //自動ブレーキ帯
 unsigned long bp_millis = 0;
 uint8_t bp_span = 20;
+uint8_t bp_span_down = 20;  //自動帯減圧インターバル
+uint8_t bp_span_up = 20;    //自動帯増圧インターバル
 uint8_t autoair_notch_brk_latch = 0;
 
 void setup() {
@@ -273,6 +276,8 @@ void setup() {
     EEPROM.put(58, 3);     //直通帯最小角度
     EEPROM.put(60, 130);   //自動帯重なり開始位置
     EEPROM.put(62, 135);   //自動帯重なり全開位置
+    EEPROM.put(64, 20);    //自動減圧インターバル
+    EEPROM.put(66, 20);    //自動増圧インターバル
     //初回書き込みフラグセット
     EEPROM.put(100, b);
   } else {
@@ -308,6 +313,8 @@ void setup() {
     EEPROM.get(58, brk_sap_min_angl);
     EEPROM.get(60, brk_keep_angl);
     EEPROM.get(62, brk_keep_full_angl);
+    EEPROM.get(64, bp_span_down);
+    EEPROM.get(66, bp_span_up);
   }
 
   //速度計テスト
@@ -524,6 +531,23 @@ void loop() {
           }
           break;
 
+          //自動帯減圧インターバル
+        case 64:
+          if (num == 0 || num > 100) {
+            s = "E1 064";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t)&bp_span_down, true);
+          }
+          break;
+
+          //自動帯増圧インターバル
+        case 66:
+          if (num == 0 || num > 100) {
+            s = "E1 064";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t)&bp_span_up, true);
+          }
+          break;
 
         default:
           s = "E0";
@@ -894,11 +918,7 @@ void read_Break(void) {
     brk_angl_latch = brk_angl;
   }
 
-  if (brk_angl < brk_keep_angl || brk_angl > brk_keep_full_angl) {
-    bp_span = 20;
-  } else if (brk_angl >= brk_keep_angl || brk_angl < brk_keep_full_angl) {
-    bp_span = map(brk_angl, brk_keep_angl, brk_keep_full_angl, 100, 20);
-  }
+
   BP(brk_angl);
 
   //自動帯圧力優先シーケンス
@@ -1383,6 +1403,16 @@ void disp_SpeedMeter(uint16_t spd, uint16_t limit) {
 }
 
 void BP(uint16_t angl) {
+
+  //BPの増減圧インターバルを設定
+  if (angl < brk_keep_angl) {
+    bp_span = bp_span_up;
+  } else if ((angl >= brk_keep_angl) && (angl <= brk_keep_full_angl)) {
+    bp_span = map(angl, brk_keep_angl, brk_keep_full_angl, bp_span_down, bp_span_dow);
+  } else if (angl > brk_keep_full_angl) {
+    bp_span = bp_span_down;
+  }
+
   //直通帯(運転位置)でBP圧を加圧
   if (angl < brk_sap_angl) {
     if ((millis() - bp_millis) > bp_span && brk_bp_press < 490) {
