@@ -576,6 +576,10 @@ void loop() {
         Serial.println(brk_keep_angl);
         Serial.print("SET READ:BRK_KEEP_FULL_ANGL=");
         Serial.println(brk_keep_full_angl);
+        Serial.print("SET READ:BP_SPAN_DOWN=");
+        Serial.println(bp_span_down);
+        Serial.print("SET READ:BP_SPAN_UP=");
+        Serial.println(bp_span_up);
 
         //速度計設定読み出し
       } else if (strbve.indexOf("SPD") > 0) {
@@ -1408,7 +1412,7 @@ void BP(uint16_t angl) {
   if (angl < brk_keep_angl) {
     bp_span = bp_span_up;
   } else if ((angl >= brk_keep_angl) && (angl <= brk_keep_full_angl)) {
-    bp_span = map(angl, brk_keep_angl, brk_keep_full_angl, bp_span_down, bp_span_dow);
+    bp_span = map(angl, brk_keep_angl, brk_keep_full_angl, bp_span_down, bp_span_down);
   } else if (angl > brk_keep_full_angl) {
     bp_span = bp_span_down;
   }
