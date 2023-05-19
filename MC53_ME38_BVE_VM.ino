@@ -206,8 +206,8 @@ bool modeADJ = false;
 //自動ブレーキ帯
 unsigned long bp_millis = 0;
 uint8_t bp_span = 20;
-uint8_t bp_span_down = 20;  //自動帯減圧インターバル
-uint8_t bp_span_up = 20;    //自動帯増圧インターバル
+uint16_t bp_span_down = 20;  //自動帯減圧インターバル
+uint16_t bp_span_up = 20;    //自動帯増圧インターバル
 uint8_t autoair_notch_brk_latch = 0;
 
 void setup() {
@@ -495,13 +495,14 @@ void loop() {
           } else {
             s = rw_eeprom(device, &num, (uint16_t)&chat_filter, true);
           }
+          break;
 
           //常用最大角度
         case 56:
           if (num == 0 || num > brk_sap_angl) {
             s = "E1 056";
           } else {
-            s = rw_eeprom(device, &num, (uint16_t)&brk_sap_max_angl, true);
+            s = rw_eeprom(device, &num, &brk_sap_max_angl, true);
           }
           break;
 
@@ -510,7 +511,7 @@ void loop() {
           if (num == 0 || num > brk_sap_max_angl) {
             s = "E1 058";
           } else {
-            s = rw_eeprom(device, &num, (uint16_t)&brk_sap_min_angl, true);
+            s = rw_eeprom(device, &num, &brk_sap_min_angl, true);
           }
           break;
           //自動帯重なり位置
@@ -518,7 +519,7 @@ void loop() {
           if (num < brk_sap_max_angl || num > brk_eb_angl) {
             s = "E1 060";
           } else {
-            s = rw_eeprom(device, &num, (uint16_t)&brk_keep_angl, true);
+            s = rw_eeprom(device, &num, &brk_keep_angl, true);
           }
           break;
 
@@ -527,7 +528,7 @@ void loop() {
           if (num < brk_sap_max_angl || num > brk_eb_angl) {
             s = "E1 062";
           } else {
-            s = rw_eeprom(device, &num, (uint16_t)&brk_keep_full_angl, true);
+            s = rw_eeprom(device, &num, &brk_keep_full_angl, true);
           }
           break;
 
@@ -536,7 +537,7 @@ void loop() {
           if (num == 0 || num > 100) {
             s = "E1 064";
           } else {
-            s = rw_eeprom(device, &num, (uint16_t)&bp_span_down, true);
+            s = rw_eeprom(device, &num, &bp_span_down, true);
           }
           break;
 
@@ -545,7 +546,7 @@ void loop() {
           if (num == 0 || num > 100) {
             s = "E1 064";
           } else {
-            s = rw_eeprom(device, &num, (uint16_t)&bp_span_up, true);
+            s = rw_eeprom(device, &num, &bp_span_up, true);
           }
           break;
 
