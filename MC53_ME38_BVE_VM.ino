@@ -96,6 +96,7 @@ uint8_t notch_brk = 0;  //ブレーキノッチ
 uint8_t autoair_notch_brk = 0;
 uint8_t notch_brk_latch = 0;
 String notch_brk_name = "";
+String notch_brk_name_latch = "";
 //以下ブレーキ設定値
 uint16_t adc = 0;
 uint16_t adc_latch = 0;
@@ -911,9 +912,15 @@ void read_Break(void) {
       notch_brk_name = "B" + String(notch_brk_num);
 
       //自動帯
-    } else if (brk_angl < brk_eb_angl) {
+    } else if (brk_angl < brk_keep_angl) {
       notch_brk = notch_brk_num + 1;
       notch_brk_name = "N ";
+
+    } else if (brk_angl < brk_keep_full_angl) {
+      notch_brk_name = "A1";
+
+    } else if (brk_angl < brk_eb_angl) {
+      notch_brk_name = "A2";
 
       //非常位置以降
     } else {
@@ -1076,7 +1083,7 @@ void keyboard_control(void) {
   //mc_DEC_latch = ioexp_1_AB & (1 << PIN_MC_DEC);//ここいる？？
 
   //ブレーキノッチ(角度)が前回と異なるとき
-  if (notch_brk != notch_brk_latch) {
+  if (notch_brk != notch_brk_latch || notch_brk_name != notch_brk_name_latch) {
     if (modeBVE && !modeADJ && !modeN) {
       uint8_t d = abs(notch_brk - notch_brk_latch);
 #ifdef DEBUG
@@ -1156,6 +1163,7 @@ void keyboard_control(void) {
   notch_mc_latch = notch_mc;
   notch_mc_H_latch = notch_mc_H;
   notch_brk_latch = notch_brk;
+  notch_brk_name_latch = notch_brk_name;
   autoair_notch_brk_latch = autoair_notch_brk;
   iDir_latch = iDir;
 }
