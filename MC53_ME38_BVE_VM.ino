@@ -555,8 +555,8 @@ void loop() {
 
         //速度計設定読み出し
       } else if (strbve.indexOf("SPD") > 0) {
-        Serial.println("SET READ: SPD");
-        Serial.print("010=");
+        Serial.println("SET READ:SPD");
+        Serial.print("SPD_010=");
         Serial.println(spd_adj_010);
         Serial.print("020=");
         Serial.println(spd_adj_020);
