@@ -30,6 +30,7 @@
 //MC53_ME38_BVE_VM_V3.7 簡易自動帯再現
 //MC53_ME38_BVE_VM_V4.0.0.0 コマンド番号化
 //MC53_ME38_BVE_VM_V4.1.0.0 自動帯を追加
+//MC53_ME38_BVE_VM_V4.1.0.1 速度計調整時速度計が動かないバグ修正
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -380,51 +381,67 @@ void loop() {
         //速度計調整
         case 12:
           s = rw_eeprom(device, &num, &spd_adj_010, true);
+          bve_speed = 100;
           break;
         case 14:
           s = rw_eeprom(device, &num, &spd_adj_020, true);
+          bve_speed = 200;
           break;
         case 16:
           s = rw_eeprom(device, &num, &spd_adj_030, true);
+          bve_speed = 300;
           break;
         case 18:
           s = rw_eeprom(device, &num, &spd_adj_040, true);
+          bve_speed = 400;
           break;
         case 20:
           s = rw_eeprom(device, &num, &spd_adj_050, true);
+          bve_speed = 500;
           break;
         case 22:
           s = rw_eeprom(device, &num, &spd_adj_060, true);
+          bve_speed = 600;
           break;
         case 24:
           s = rw_eeprom(device, &num, &spd_adj_070, true);
+          bve_speed = 700;
           break;
         case 26:
           s = rw_eeprom(device, &num, &spd_adj_080, true);
+          bve_speed = 800;
           break;
         case 28:
           s = rw_eeprom(device, &num, &spd_adj_090, true);
+          bve_speed = 900;
           break;
         case 30:
           s = rw_eeprom(device, &num, &spd_adj_100, true);
+          bve_speed = 1000;
           break;
         case 32:
           s = rw_eeprom(device, &num, &spd_adj_110, true);
+          bve_speed = 1100;
           break;
         case 34:
           s = rw_eeprom(device, &num, &spd_adj_120, true);
+          bve_speed = 1200;
           break;
         case 36:
           s = rw_eeprom(device, &num, &spd_adj_130, true);
+          bve_speed = 1300;
           break;
         case 38:
           s = rw_eeprom(device, &num, &spd_adj_140, true);
+          bve_speed = 1400;
           break;
         case 40:
           s = rw_eeprom(device, &num, &spd_adj_150, true);
+          bve_speed = 1500;
           break;
         case 42:
           s = rw_eeprom(device, &num, &spd_adj_160, true);
+          bve_speed = 1600;
           break;
 
         //最高速度設定
@@ -531,6 +548,10 @@ void loop() {
         Serial.println(brk_sap_min_angl);
         Serial.print("SET READ:CHAT_FILTER=");
         Serial.println(chat_filter);
+        Serial.print("SET READ:BRK_KEEP_ANGL=");
+        Serial.println(brk_keep_angl);
+        Serial.print("SET READ:BRK_KEEP_FULL_ANGL=");
+        Serial.println(brk_keep_full_angl);
 
         //速度計設定読み出し
       } else if (strbve.indexOf("SPD") > 0) {
@@ -873,9 +894,9 @@ void read_Break(void) {
     brk_angl_latch = brk_angl;
   }
 
-  if (brk_angl < brk_keep_angl || brk_angl > brk_keep_full_angl){
+  if (brk_angl < brk_keep_angl || brk_angl > brk_keep_full_angl) {
     bp_span = 20;
-  }else if (brk_angl >= brk_keep_angl || brk_angl < brk_keep_full_angl) {
+  } else if (brk_angl >= brk_keep_angl || brk_angl < brk_keep_full_angl) {
     bp_span = map(brk_angl, brk_keep_angl, brk_keep_full_angl, 100, 20);
   }
   BP(brk_angl);
