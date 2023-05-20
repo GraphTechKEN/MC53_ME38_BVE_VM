@@ -32,6 +32,7 @@
 //MC53_ME38_BVE_VM_V4.1.0.0 自動帯を追加
 //MC53_ME38_BVE_VM_V4.1.0.1 速度計調整時速度計が動かないバグ修正
 //MC53_ME38_BVE_VM_V4.1.0.2 BPの増減圧インターバルを追加
+//MC53_ME38_BVE_VM_V4.1.0.3 自動帯の使用可否の選択機能を追加
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -101,7 +102,7 @@ String notch_brk_name_latch = "";
 uint16_t adc = 0;
 uint16_t adc_latch = 0;
 uint16_t brk_sap_angl = 80;         //直通帯の角度
-uint8_t notch_brk_num = 8;          //常用ブレーキ段数
+uint16_t notch_brk_num = 8;          //常用ブレーキ段数
 uint16_t brk_full_angl = 165;       //ブレーキ幅範囲
 uint16_t brk_eb_angl = 150;         //緩め位置に対して非常位置の角度
 uint16_t brk_sap_max_angl = 67;     //直通帯最大角度
@@ -210,6 +211,7 @@ uint8_t bp_span = 20;
 uint16_t bp_span_down = 20;  //自動帯減圧インターバル
 uint16_t bp_span_up = 20;    //自動帯増圧インターバル
 uint8_t autoair_notch_brk_latch = 0;
+uint16_t autoair_use = true;  //自動帯使用可否
 
 void setup() {
   pinMode(SS_Brk, OUTPUT);  //MCP3008
@@ -279,6 +281,7 @@ void setup() {
     EEPROM.put(62, 135);   //自動帯重なり全開位置
     EEPROM.put(64, 20);    //自動減圧インターバル
     EEPROM.put(66, 20);    //自動増圧インターバル
+    EEPROM.put(68, 0);     //自動帯使用可否
     //初回書き込みフラグセット
     EEPROM.put(100, b);
   } else {
@@ -316,6 +319,7 @@ void setup() {
     EEPROM.get(62, brk_keep_full_angl);
     EEPROM.get(64, bp_span_down);
     EEPROM.get(66, bp_span_up);
+    EEPROM.get(68, autoair_use);
   }
 
   //速度計テスト
@@ -545,9 +549,18 @@ void loop() {
           //自動帯増圧インターバル
         case 66:
           if (num == 0 || num > 100) {
-            s = "E1 064";
+            s = "E1 066";
           } else {
             s = rw_eeprom(device, &num, &bp_span_up, true);
+          }
+          break;
+
+          //自動帯増圧インターバル
+        case 68:
+          if (num < 0 || num > 1) {
+            s = "E1 068";
+          } else {
+            s = rw_eeprom(device, &num, (uint16_t)&autoair_use, true);
           }
           break;
 
@@ -582,6 +595,8 @@ void loop() {
         Serial.println(bp_span_down);
         Serial.print("SET READ:BP_SPAN_UP=");
         Serial.println(bp_span_up);
+        Serial.print("SET READ:AUTOAIR_USE=");
+        Serial.println(autoair_use);
 
         //速度計設定読み出し
       } else if (strbve.indexOf("SPD") > 0) {
@@ -913,14 +928,29 @@ void read_Break(void) {
 
       //自動帯
     } else if (brk_angl < brk_keep_angl) {
-      notch_brk = notch_brk_num + 1;
-      notch_brk_name = "N ";
+      if (autoair_use) {
+        notch_brk = notch_brk_num + 1;
+        notch_brk_name = "N ";
+      } else {
+        notch_brk = 1;
+        notch_brk_name = "B" + String(notch_brk_num);
+      }
 
     } else if (brk_angl < brk_keep_full_angl) {
-      notch_brk_name = "A1";
+      if (autoair_use) {
+        notch_brk_name = "A1";
+      } else {
+        notch_brk = 1;
+        notch_brk_name = "B" + String(notch_brk_num);
+      }
 
     } else if (brk_angl < brk_eb_angl) {
-      notch_brk_name = "A2";
+      if (autoair_use) {
+        notch_brk_name = "A2";
+      } else {
+        notch_brk = 1;
+        notch_brk_name = "B" + String(notch_brk_num);
+      }
 
       //非常位置以降
     } else {
@@ -930,29 +960,8 @@ void read_Break(void) {
     brk_angl_latch = brk_angl;
   }
 
-
-  BP(brk_angl);
-
-  //自動帯圧力優先シーケンス
-  //N位置
-  if (brk_angl <= brk_sap_min_angl) {
-    //自動ブレーキ
-    if (autoair_notch_brk <= notch_brk_num + 1) {  //自動ブレーキ帯の段数が高いとき
-      notch_brk = autoair_notch_brk;
-    }
-    //直通帯位置
-  } else if (brk_angl < brk_sap_angl) {
-    //自動ブレーキ
-    if (notch_brk > autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
-      notch_brk = autoair_notch_brk;
-    }
-
-    //自動帯
-  } else if (brk_angl < brk_eb_angl) {
-    //自動ブレーキ
-    if (notch_brk > autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
-      notch_brk = autoair_notch_brk;
-    }
+  if (autoair_use) {
+    BP(brk_angl);
   }
 
   //ポテンショ生データ表示モード
@@ -1451,6 +1460,28 @@ void BP(uint16_t angl) {
 
   //BC圧からブレーキノッチに変換
   autoair_notch_brk = map(autoair_bc_press, 0, 440, notch_brk_num + 1, 1);
+
+  //自動帯圧力優先シーケンス
+  //N位置
+  if (brk_angl <= brk_sap_min_angl) {
+    //自動ブレーキ
+    if (autoair_notch_brk <= notch_brk_num + 1) {  //自動ブレーキ帯の段数が高いとき
+      notch_brk = autoair_notch_brk;
+    }
+    //直通帯位置
+  } else if (brk_angl < brk_sap_angl) {
+    //自動ブレーキ
+    if (notch_brk > autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
+      notch_brk = autoair_notch_brk;
+    }
+
+    //自動帯
+  } else if (brk_angl < brk_eb_angl) {
+    //自動ブレーキ
+    if (notch_brk > autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
+      notch_brk = autoair_notch_brk;
+    }
+  }
 }
 
 String rw_eeprom(uint8_t dev, uint16_t *n, int *param, bool write) {
