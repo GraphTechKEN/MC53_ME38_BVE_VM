@@ -33,6 +33,7 @@
 //MC53_ME38_BVE_VM_V4.1.0.1 速度計調整時速度計が動かないバグ修正
 //MC53_ME38_BVE_VM_V4.1.0.2 BPの増減圧インターバルを追加
 //MC53_ME38_BVE_VM_V4.1.0.3 自動帯の使用可否の選択機能を追加
+//MC53_ME38_BVE_VM_V4.1.0.4 自動帯有効時、電制を無効とする
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -176,7 +177,7 @@ float adj_EB = 0.0;
 
 //以下ブレーキ位置調整用
 uint16_t POT_N = 0;   //00
-uint16_t POT_EB = 0;  //02
+uint16_t POT_EB = 512;  //02
 //以上ブレーキ位置調整用
 
 unsigned long iniMillis_N = 0;
@@ -359,7 +360,7 @@ void loop() {
           if (num == 0 || num > 255) {
             s = "E1 004";
           } else {
-            s = rw_eeprom(device, &num, (uint16_t)&notch_brk_num, true);
+            s = rw_eeprom(device, &num, &notch_brk_num, true);
           }
           break;
 
@@ -368,7 +369,7 @@ void loop() {
           if (num == 0 || num > brk_eb_angl) {
             s = "E1 006";
           } else {
-            s = rw_eeprom(device, &num, (uint16_t)&brk_sap_angl, true);
+            s = rw_eeprom(device, &num, &brk_sap_angl, true);
           }
           break;
 
@@ -377,7 +378,7 @@ void loop() {
           if (num == 0 || num > brk_full_angl) {
             s = "E1 008";
           } else {
-            s = rw_eeprom(device, &num, (uint16_t)&brk_eb_angl, true);
+            s = rw_eeprom(device, &num, &brk_eb_angl, true);
           }
           break;
 
@@ -386,7 +387,7 @@ void loop() {
           if (num == 0 || num > 255) {
             s = "E1 010";
           } else {
-            s = rw_eeprom(device, &num, (uint16_t)&brk_full_angl, true);
+            s = rw_eeprom(device, &num, &brk_full_angl, true);
           }
           break;
 
@@ -729,6 +730,10 @@ void loop() {
     digitalWrite(8, !bve_door);
 
     //Serial1転送
+    //自動帯有効時、電制を無効とする
+    if(autoair_use && brk_angl > brk_sap_angl){
+      strbve.setCharAt(18, '0');
+    }
     Serial1.print(strbve);
     Serial1.print("\r");
 
@@ -1180,9 +1185,9 @@ void keyboard_control(void) {
 //ブレーキ角度調整
 void read_Break_Setting(void) {
   uint16_t value = 0;
-  bool n = (adcRead(5) < 512);
-  bool eb = (adcRead(6) < 512);
-  if (n) {
+  bool btn_n = (adcRead(5) < 512);
+  bool btn_eb = (adcRead(6) < 512);
+  if (btn_n) {
     if (setMode_N == 0) {
       adj_N = adcRead(0);
       setMode_N = 1;
@@ -1209,7 +1214,7 @@ void read_Break_Setting(void) {
     setMode_N = 0;
   }
 
-  if (eb) {
+  if (btn_eb) {
     if (setMode_EB == 0) {
       adj_EB = adcRead(0);
       setMode_EB = 1;
