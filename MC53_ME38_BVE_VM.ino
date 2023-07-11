@@ -34,7 +34,8 @@
 //MC53_ME38_BVE_VM_V4.1.0.2 BPの増減圧インターバルを追加
 //MC53_ME38_BVE_VM_V4.1.0.3 自動帯の使用可否の選択機能を追加
 //MC53_ME38_BVE_VM_V4.1.0.4 自動帯有効時、電制を無効とする
-//MC53_ME38_BVE_VM_V4.1.0.5 自動帯有効時、レバーサをNとする　
+//MC53_ME38_BVE_VM_V4.1.0.5 自動帯有効時、レバーサをNとする
+//MC53_ME38_BVE_VM_V4.1.0.6 自動帯有効時、マスコンノッチ投入でF/B対応、NでレバーサNとする　
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -833,37 +834,47 @@ void read_MC(void) {
       if (~ioexp_1_AB & (1 << PIN_MC_5)) {
         notch_mc = 55;
         notch_name = "P5";
+        autoair_dir_mask = false;
       } else if (~ioexp_1_AB & (1 << PIN_MC_4)) {
         notch_mc = 54;
         notch_name = "P4";
+        autoair_dir_mask = false;
       } else if (~ioexp_1_AB & (1 << PIN_MC_3)) {
         notch_mc = 53;
         notch_name = "P3";
+        autoair_dir_mask = false;
       } else if (~ioexp_1_AB & (1 << PIN_MC_2)) {
         notch_mc = 52;
         notch_name = "P2";
+        autoair_dir_mask = false;
       } else if (~ioexp_1_AB & (1 << PIN_MC_1)) {
         notch_mc = 51;
         notch_name = "P1";
+        autoair_dir_mask = false;
       } else {
         notch_mc = 50;
         notch_mc_H = 100;
         notch_name = "N ";
+        if (brk_angl > brk_sap_angl && brk_angl < brk_eb_angl && autoair_use) {
+          autoair_dir_mask = true;
+          iDir = 0;
+          strDir = "N ";
+        }
       }
     } else {
-      if (~ioexp_1_AB & (1 << PIN_MC_5)) {
+      if (~ioexp_1_AB & (1 << PIN_MC_5) && !autoair_dir_mask) {
         notch_mc_H = 101;
         notch_name = "H1";
-      } else if (~ioexp_1_AB & (1 << PIN_MC_3) && ioexp_1_AB & (1 << PIN_MC_4)) {
+      } else if (~ioexp_1_AB & (1 << PIN_MC_3) && ioexp_1_AB & (1 << PIN_MC_4) && !autoair_dir_mask) {
         notch_mc_H = 102;
         notch_name = "H2";
-      } else if (~ioexp_1_AB & (1 << PIN_MC_2) && ioexp_1_AB & (1 << PIN_MC_4)) {
+      } else if (~ioexp_1_AB & (1 << PIN_MC_2) && ioexp_1_AB & (1 << PIN_MC_4) && !autoair_dir_mask) {
         notch_mc_H = 103;
         notch_name = "H3";
-      } else if (~ioexp_1_AB & (1 << PIN_MC_2) && ~ioexp_1_AB & (1 << PIN_MC_4)) {
+      } else if (~ioexp_1_AB & (1 << PIN_MC_2) && ~ioexp_1_AB & (1 << PIN_MC_4) && !autoair_dir_mask) {
         notch_mc_H = 104;
         notch_name = "H4";
-      } else if (~ioexp_1_AB & (1 << PIN_MC_3) && ~ioexp_1_AB & (1 << PIN_MC_4)) {
+      } else if (~ioexp_1_AB & (1 << PIN_MC_3) && ~ioexp_1_AB & (1 << PIN_MC_4) && !autoair_dir_mask) {
         notch_mc_H = 105;
         notch_name = "H5";
       }
