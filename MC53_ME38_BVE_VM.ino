@@ -34,6 +34,7 @@
 //MC53_ME38_BVE_VM_V4.1.0.2 BPの増減圧インターバルを追加
 //MC53_ME38_BVE_VM_V4.1.0.3 自動帯の使用可否の選択機能を追加
 //MC53_ME38_BVE_VM_V4.1.0.4 自動帯有効時、電制を無効とする
+//MC53_ME38_BVE_VM_V4.1.0.5 自動帯有効時、レバーサをNとする　
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -103,7 +104,7 @@ String notch_brk_name_latch = "";
 uint16_t adc = 0;
 uint16_t adc_latch = 0;
 uint16_t brk_sap_angl = 80;         //直通帯の角度
-uint16_t notch_brk_num = 8;          //常用ブレーキ段数
+uint16_t notch_brk_num = 8;         //常用ブレーキ段数
 uint16_t brk_full_angl = 165;       //ブレーキ幅範囲
 uint16_t brk_eb_angl = 150;         //緩め位置に対して非常位置の角度
 uint16_t brk_sap_max_angl = 67;     //直通帯最大角度
@@ -176,7 +177,7 @@ float adj_N = 0.0;
 float adj_EB = 0.0;
 
 //以下ブレーキ位置調整用
-uint16_t POT_N = 0;   //00
+uint16_t POT_N = 0;     //00
 uint16_t POT_EB = 512;  //02
 //以上ブレーキ位置調整用
 
@@ -212,7 +213,8 @@ uint8_t bp_span = 20;
 uint16_t bp_span_down = 20;  //自動帯減圧インターバル
 uint16_t bp_span_up = 20;    //自動帯増圧インターバル
 uint8_t autoair_notch_brk_latch = 0;
-uint16_t autoair_use = true;  //自動帯使用可否
+uint16_t autoair_use = true;    //自動帯使用可否
+bool autoair_dir_mask = false;  //自動帯使用時方向切替をマスク
 
 void setup() {
   pinMode(SS_Brk, OUTPUT);  //MCP3008
@@ -731,7 +733,7 @@ void loop() {
 
     //Serial1転送
     //自動帯有効時、電制を無効とする
-    if(autoair_use && brk_angl > brk_sap_angl){
+    if (autoair_use && brk_angl > brk_sap_angl) {
       strbve.setCharAt(18, '0');
     }
     Serial1.print(strbve);
@@ -882,17 +884,19 @@ void read_MC(void) {
 
 //マスコンレバーサ読取
 void read_Dir(void) {
-  if (~ioexp_1_AB & (1 << PIN_MC_DIR_F)) {
-    iDir = 1;
-    strDir = "F";
-    strDir_N = "L ";
-  } else if (~ioexp_1_AB & (1 << PIN_MC_DIR_B)) {
-    iDir = -1;
-    strDir = "B";
-    strDir_N = "R ";
-  } else {
-    iDir = 0;
-    strDir = "N ";
+  if (!autoair_dir_mask) {
+    if (~ioexp_1_AB & (1 << PIN_MC_DIR_F)) {
+      iDir = 1;
+      strDir = "F";
+      strDir_N = "L ";
+    } else if (~ioexp_1_AB & (1 << PIN_MC_DIR_B)) {
+      iDir = -1;
+      strDir = "B";
+      strDir_N = "R ";
+    } else {
+      iDir = 0;
+      strDir = "N ";
+    }
   }
 }
 
@@ -918,6 +922,7 @@ void read_Break(void) {
     if (brk_angl <= brk_sap_min_angl) {
       notch_brk = notch_brk_num + 1;
       notch_brk_name = "N ";
+      autoair_dir_mask = false;
 
       //直通帯位置
     } else if (brk_angl < brk_sap_max_angl) {
@@ -925,42 +930,70 @@ void read_Break(void) {
       notch_brk = notch_brk_num + 1 - temp_notch_brk;
       String s = String(temp_notch_brk);
       notch_brk_name = "B" + s;
+      autoair_dir_mask = false;
 
       //常用最大位置～直通帯範囲まで
     } else if (brk_angl < brk_sap_angl) {
       notch_brk = 1;
       notch_brk_name = "B" + String(notch_brk_num);
+      autoair_dir_mask = false;
 
       //自動帯
     } else if (brk_angl < brk_keep_angl) {
       if (autoair_use) {
         notch_brk = notch_brk_num + 1;
         notch_brk_name = "N ";
+        if (notch_mc == 50 && notch_mc_H == 100) {
+          autoair_dir_mask = true;
+          iDir = 0;
+          strDir = "N ";
+        } else {
+          autoair_dir_mask = false;
+        }
+
       } else {
         notch_brk = 1;
         notch_brk_name = "B" + String(notch_brk_num);
+        autoair_dir_mask = false;
       }
 
     } else if (brk_angl < brk_keep_full_angl) {
       if (autoair_use) {
         notch_brk_name = "A1";
+        if (notch_mc == 50 && notch_mc_H == 100) {
+          autoair_dir_mask = true;
+          iDir = 0;
+          strDir = "N ";
+        } else {
+          autoair_dir_mask = false;
+        }
       } else {
         notch_brk = 1;
         notch_brk_name = "B" + String(notch_brk_num);
+        autoair_dir_mask = false;
       }
 
     } else if (brk_angl < brk_eb_angl) {
       if (autoair_use) {
         notch_brk_name = "A2";
+        if (notch_mc == 50 && notch_mc_H == 100) {
+          autoair_dir_mask = true;
+          iDir = 0;
+          strDir = "N ";
+        } else {
+          autoair_dir_mask = false;
+        }
       } else {
         notch_brk = 1;
         notch_brk_name = "B" + String(notch_brk_num);
+        autoair_dir_mask = false;
       }
 
       //非常位置以降
     } else {
       notch_brk = 0;
       notch_brk_name = "EB";
+      autoair_dir_mask = false;
     }
     brk_angl_latch = brk_angl;
   }
