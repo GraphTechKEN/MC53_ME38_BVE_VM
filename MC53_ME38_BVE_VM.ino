@@ -35,7 +35,8 @@
 //MC53_ME38_BVE_VM_V4.1.0.3 自動帯の使用可否の選択機能を追加
 //MC53_ME38_BVE_VM_V4.1.0.4 自動帯有効時、電制を無効とする
 //MC53_ME38_BVE_VM_V4.1.0.5 自動帯有効時、レバーサをNとする
-//MC53_ME38_BVE_VM_V4.1.0.6 自動帯有効時、マスコンノッチ投入でF/B対応、NでレバーサNとする　
+//MC53_ME38_BVE_VM_V4.1.0.6 自動帯有効時、マスコンノッチ投入でF/B対応、NでレバーサNとする
+//MC53_ME38_BVE_VM_V4.1.0.7 個別読出追加、微修正、最大ノッチ指定追加
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -217,6 +218,10 @@ uint8_t autoair_notch_brk_latch = 0;
 uint16_t autoair_use = true;    //自動帯使用可否
 bool autoair_dir_mask = false;  //自動帯使用時方向切替をマスク
 
+//マスコンノッチ
+uint16_t notch_mc_num_max = 5;
+uint16_t notch_mc_num = 5;
+
 void setup() {
   pinMode(SS_Brk, OUTPUT);  //MCP3008
   pinMode(SS_Mc, OUTPUT);   //MCP23S17_MC
@@ -249,8 +254,9 @@ void setup() {
   }
 
   //初回書き込みチェック
-  bool b = 0;
-  if (EEPROM.get(100, b) == 0) {
+  int16_t b = 0;
+  EEPROM.get(100, b);
+  if ( b != 1) {
     EEPROM.put(0, 0);      //POT_N
     EEPROM.put(2, 512);    //POT_EB
     EEPROM.put(4, 8);      //ブレーキ段数設定
@@ -286,8 +292,10 @@ void setup() {
     EEPROM.put(64, 20);    //自動減圧インターバル
     EEPROM.put(66, 20);    //自動増圧インターバル
     EEPROM.put(68, 0);     //自動帯使用可否
+    EEPROM.put(70, 5);
+    EEPROM.put(72, 5);
     //初回書き込みフラグセット
-    EEPROM.put(100, b);
+    EEPROM.put(100, 1);
   } else {
     EEPROM.get(0, POT_N);
     EEPROM.get(2, POT_EB);
@@ -324,6 +332,8 @@ void setup() {
     EEPROM.get(64, bp_span_down);
     EEPROM.get(66, bp_span_up);
     EEPROM.get(68, autoair_use);
+    EEPROM.get(70, notch_mc_num_max);
+    EEPROM.get(72, notch_mc_num);
   }
 
   //速度計テスト
@@ -361,7 +371,7 @@ void loop() {
         //ブレーキ段数設定
         case 4:
           if (num == 0 || num > 255) {
-            s = "E1 004";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &notch_brk_num, true);
           }
@@ -370,7 +380,7 @@ void loop() {
         //直通帯範囲
         case 6:
           if (num == 0 || num > brk_eb_angl) {
-            s = "E1 006";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &brk_sap_angl, true);
           }
@@ -379,7 +389,7 @@ void loop() {
         //非常位置
         case 8:
           if (num == 0 || num > brk_full_angl) {
-            s = "E1 008";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &brk_eb_angl, true);
           }
@@ -388,7 +398,7 @@ void loop() {
         //ブレーキ最大角度
         case 10:
           if (num == 0 || num > 255) {
-            s = "E1 010";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &brk_full_angl, true);
           }
@@ -463,7 +473,7 @@ void loop() {
         //最高速度設定
         case 44:
           if (num == 0) {
-            s = "E1 044";
+            s = "E1 " + device;
           } else {
             bve_speed = num * 10;
             s = rw_eeprom(device, &num, &spd_limit, true);
@@ -473,7 +483,7 @@ void loop() {
         //回生モード
         case 46:
           if (num > 1) {
-            s = "E1 046";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, (uint16_t)&curr_kaisei, true);
           }
@@ -482,7 +492,7 @@ void loop() {
         //計器モード
         case 48:
           if (num > 1) {
-            s = "E1 048";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, (uint16_t)&curr_mode, true);
           }
@@ -491,7 +501,7 @@ void loop() {
         //列車抵抗
         case 52:
           if (num == 0) {
-            s = "E1 052";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &vehicle_res, true);
           }
@@ -500,16 +510,16 @@ void loop() {
         //チャタリング
         case 54:
           if (num < 0 || num > 3) {
-            s = "E1 054";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, (uint16_t)&chat_filter, true);
           }
           break;
 
-          //常用最大角度
+        //常用最大角度
         case 56:
           if (num == 0 || num > brk_sap_angl) {
-            s = "E1 056";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &brk_sap_max_angl, true);
           }
@@ -518,53 +528,71 @@ void loop() {
         //直通帯最小角度
         case 58:
           if (num == 0 || num > brk_sap_max_angl) {
-            s = "E1 058";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &brk_sap_min_angl, true);
           }
           break;
-          //自動帯重なり位置
+        //自動帯重なり位置
         case 60:
           if (num < brk_sap_max_angl || num > brk_eb_angl) {
-            s = "E1 060";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &brk_keep_angl, true);
           }
           break;
 
-          //自動帯重なり開始位置
+        //自動帯重なり開始位置
         case 62:
           if (num < brk_sap_max_angl || num > brk_eb_angl) {
-            s = "E1 062";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &brk_keep_full_angl, true);
           }
           break;
 
-          //自動帯減圧インターバル
+        //自動帯減圧インターバル
         case 64:
           if (num == 0 || num > 100) {
-            s = "E1 064";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &bp_span_down, true);
           }
           break;
 
-          //自動帯増圧インターバル
+        //自動帯増圧インターバル
         case 66:
           if (num == 0 || num > 100) {
-            s = "E1 066";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &bp_span_up, true);
           }
           break;
 
-          //自動帯増圧インターバル
+        //自動帯使用可否
         case 68:
           if (num < 0 || num > 1) {
-            s = "E1 068";
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, (uint16_t)&autoair_use, true);
+          }
+          break;
+
+        //マスコンノッチ最大数
+        case 70:
+          if (num < 4 || num > 6) {
+            s = "E1 070";
+          } else {
+            s = rw_eeprom(device, &num, &notch_mc_num_max, true);
+          }
+          break;
+
+        //マスコンノッチ数(車両)
+        case 72:
+          if (num < 4 || num > 6) {
+            s = "E1 072";
+          } else {
+            s = rw_eeprom(device, &num, &notch_mc_num, true);
           }
           break;
 
@@ -832,12 +860,22 @@ void read_MC(void) {
 
     if (ioexp_1_AB & (1 << PIN_MC_DEC)) {
       if (~ioexp_1_AB & (1 << PIN_MC_5)) {
-        notch_mc = 55;
-        notch_name = "P5";
+        if ((notch_mc_num_max == 5) && (notch_mc_num == 4)) {
+          notch_mc = 54;
+          notch_name = "P4";
+        } else if ((notch_mc_num_max == 5) && (notch_mc_num == 5)) {
+          notch_mc = 55;
+          notch_name = "P5";
+        }
         autoair_dir_mask = false;
       } else if (~ioexp_1_AB & (1 << PIN_MC_4)) {
-        notch_mc = 54;
-        notch_name = "P4";
+        if ((notch_mc_num_max == 4) && (notch_mc_num == 5)) {
+          notch_mc = 55;
+          notch_name = "P5";
+        } else if (((notch_mc_num_max == 5) && (notch_mc_num == 5)) || ((notch_mc_num_max == 4) && (notch_mc_num == 4))) {
+          notch_mc = 54;
+          notch_name = "P4";
+        }
         autoair_dir_mask = false;
       } else if (~ioexp_1_AB & (1 << PIN_MC_3)) {
         notch_mc = 53;
