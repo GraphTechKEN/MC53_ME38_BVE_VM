@@ -37,6 +37,7 @@
 //MC53_ME38_BVE_VM_V4.1.0.5 自動帯有効時、レバーサをNとする
 //MC53_ME38_BVE_VM_V4.1.0.6 自動帯有効時、マスコンノッチ投入でF/B対応、NでレバーサNとする
 //MC53_ME38_BVE_VM_V4.1.0.7 個別読出追加、微修正、最大ノッチ指定追加
+//MC53_ME38_BVE_VM_V4.1.0.8 最大ノッチ条件判定微修正
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -580,8 +581,8 @@ void loop() {
 
         //マスコンノッチ最大数
         case 70:
-          if (num < 4 || num > 6) {
-            s = "E1 070";
+          if (num < 0) {
+            s = "E1 " + device;
           } else {
             s = rw_eeprom(device, &num, &notch_mc_num_max, true);
           }
@@ -589,8 +590,8 @@ void loop() {
 
         //マスコンノッチ数(車両)
         case 72:
-          if (num < 4 || num > 6) {
-            s = "E1 072";
+          if (num < 0) {
+            s = "E1 " + device;;
           } else {
             s = rw_eeprom(device, &num, &notch_mc_num, true);
           }
