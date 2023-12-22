@@ -9,9 +9,11 @@
 >- 付属の調整ソフトで、ブレーキ弁角度などの細かい設定も可能
 
 ## 製作方法
-1. 添付の回路図通りに製作します。実態配線図と回路図がありますので参考にしてください。コネクタ類も参考です。直接配線しても問題はありません。
-2. AE-MCP4725の基板裏面はプルアップのみハンダでジャンパー接続します。A0はピンに配線しています。
-3. Arduino IDEには、Adafruit MCP23017 Arduino Library と Adafruit_MCP4725 Arduino Library を導入してください。
+1. 添付の[回路図通り](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.pdf)に[製作](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.png)します。
+   [回路図](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.pdf)と[実態配線図](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.png)がありますので参考にしてください。
+   コネクタ類も参考です。直接配線しても問題はありません。
+3. AE-MCP4725の基板裏面はプルアップのみハンダでジャンパー接続します。A0はピンに配線しています。
+4. Arduino IDEには、Adafruit MCP23017 Arduino Library と Adafruit_MCP4725 Arduino Library を導入してください。
 
 > [!WARNING]
 >- 配線が1本でも異なると所望の動作はしません。
