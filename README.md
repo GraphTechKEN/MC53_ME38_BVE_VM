@@ -11,11 +11,12 @@
 ## 製作方法
 1. 基板は秋月電子製片面紙エポキシ・ユニバーサル基板　Ａの小タイプ(AE-5)またはサンハヤト製(ICB-97 1.2mm またはICB-97B 1.6mm)を推奨します。
 2. 使用マイコンはArduino MicroのArduino純正品です。それ以外では正しく動作しないかピン配置が異なります。ご注意ください。
-3. 添付の[回路図通り](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.pdf)に[製作](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.png)します。
+3. 10kΩの集合抵抗は8素子タイプで、コモンを1とした場合は2番目と3番目のピンをカットしてください。
+4. 添付の[回路図通り](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.pdf)に[製作](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.png)します。
    [回路図](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.pdf)と[実態配線図](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.png)がありますので参考にしてください。
    コネクタ類も参考です。直接配線しても問題はありません。
-4. AE-MCP4725の基板裏面はプルアップのみハンダでジャンパー接続します。A0はピンに配線しています。
-5. Arduino IDEには、Adafruit MCP23017 Arduino Library と Adafruit_MCP4725 Arduino Library を導入してください。
+5. AE-MCP4725の基板裏面はプルアップのみハンダでジャンパー接続します。A0はピンに配線しています。
+6. Arduino IDEには、Adafruit MCP23017 Arduino Library と Adafruit_MCP4725 Arduino Library を導入してください。
 
 > [!WARNING]
 >- 配線が1本でも異なると所望の動作はしません。
