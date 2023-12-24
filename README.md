@@ -27,5 +27,5 @@
 > [こちら](https://github.com/GraphTechKEN/SerialOutputEx)を参照してください。
 
 ## 謝辞
-本開発品はED67900-5様(代表)の出版冊子[実物部品を使った運転シミュレータのつくりかた | ツナギ図 laboratory](https://booth.pm/ja/items/1756291)を参考にしております。  
+本開発品はツナギ図 laboratory(ED67900-5様代表ほか)の出版冊子[実物部品を使った運転シミュレータのつくりかた | ](https://booth.pm/ja/items/1756291)を参考にしております。  
 この場を借りて御礼申し上げます。
