@@ -17,11 +17,17 @@
    コネクタ類も参考です。直接配線しても問題はありません。
 5. AE-MCP4725の基板裏面はSDAとSCLのプルアップのみハンダでジャンパー接続します。A0はピンに配線しています。
 6. Arduino IDEには、Adafruit MCP23017 Arduino Library と Adafruit_MCP4725 Arduino Library を導入してください。
+   ![実態配線図](https://github.com/GraphTechKEN/MC53_ME38_BVE_VM/blob/main/ME38_MC53_Pedal_SWBox_DG_VM_V4.1.0.7.png)
 
 > [!WARNING]
 >- 配線が1本でも異なると所望の動作はしません。SPIとI2Cのバスライン、+5VとGNDのショートは特に注意してください。
 >- 本開発品によるいかなる破損や不具合等が生じても当方はいかなる責任を負いかねますので、ご了承ください。
 >- BU0836を使用した外部機器とは相性不具合を起こす場合があります。ご注意ください。
+
+> [!TIP]
+>- Serial1出力と5V出力は、表示灯類など拡張用のために用います。
+>- Serial1出力(Tx)：USBからのSerial電文をそのままSerial1から他基板へ渡します。
+>- Serial1入力(Rx):他基板から本基板へ信号を渡します。(※現時点で実装無し)
 
 ## BVEとの連動方法
 > [こちら](https://github.com/GraphTechKEN/SerialOutputEx)を参照してください。
