@@ -38,6 +38,10 @@
 //MC53_ME38_BVE_VM_V4.1.0.6 自動帯有効時、マスコンノッチ投入でF/B対応、NでレバーサNとする
 //MC53_ME38_BVE_VM_V4.1.0.7 個別読出追加、微修正、最大ノッチ指定追加
 //MC53_ME38_BVE_VM_V4.1.0.8 最大ノッチ条件判定微修正
+//MC53_ME38_BVE_VM_V4.1.0.9 EEPROM書き込み関数修正(int→uint16_t)、ATS_ConfとATS_Contを反転機能追加、
+//MC53_ME38_BVE_VM_V4.1.0.10 小修正、他基板対応修正
+//MC53_ME38_BVE_VM_V4.1.1.0 自動ブレーキ基板対応 ATS警報持続、確認ボタン基板転送対応
+
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -86,7 +90,7 @@ SPISettings settings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
 
 uint16_t ioexp_1_AB = 0;
 
-String strbve = "";
+String strbve = "0000/1/ 00000/100000/0000000000000000000001";
 uint16_t bve_speed = 0;
 bool bve_door = 0;
 
@@ -106,56 +110,53 @@ String notch_brk_name_latch = "";
 //以下ブレーキ設定値
 uint16_t adc = 0;
 uint16_t adc_latch = 0;
-uint16_t brk_sap_angl = 80;         //直通帯の角度
-uint16_t notch_brk_num = 8;         //常用ブレーキ段数
-uint16_t brk_full_angl = 165;       //ブレーキ幅範囲
-uint16_t brk_eb_angl = 150;         //緩め位置に対して非常位置の角度
-uint16_t brk_sap_max_angl = 67;     //直通帯最大角度
-uint16_t brk_sap_min_angl = 3;      //直通帯最小角度
-uint16_t brk_keep_angl = 130;       //重なり全開位置
-uint16_t brk_keep_full_angl = 135;  //重なり開始位置
+uint16_t notch_brk_num = 8;    //004 常用ブレーキ段数
+uint16_t brk_sap_angl = 80;    //006 直通帯の角度
+uint16_t brk_eb_angl = 150;    //008 非常位置
+uint16_t brk_full_angl = 165;  //010 ブレーキ全体角度
+
+uint16_t brk_sap_max_angl = 67;     //056 直通帯最大角度
+uint16_t brk_sap_min_angl = 3;      //058 直通帯最小角度
+uint16_t brk_keep_angl = 130;       //060 重なり全開位置
+uint16_t brk_keep_full_angl = 135;  //062 重なり開始位置
 uint16_t brk_bp_press = 490;        //BP管圧力
-float brk_angl = 0;
-float brk_angl_latch = 0;
+uint8_t brk_angl = 0;
+uint8_t brk_angl_latch = 0;
 //以上ブレーキ設定値
 //以下速度計補正値
-uint16_t spd_adj_010 = 150;   //12
-uint16_t spd_adj_020 = 400;   //14
-uint16_t spd_adj_030 = 680;   //16
-uint16_t spd_adj_040 = 1010;  //18
-uint16_t spd_adj_050 = 1330;  //20
-uint16_t spd_adj_060 = 1650;  //22
-uint16_t spd_adj_070 = 2000;  //24
-uint16_t spd_adj_080 = 2340;  //26
-uint16_t spd_adj_090 = 2680;  //28
-uint16_t spd_adj_100 = 3020;  //30
-uint16_t spd_adj_110 = 3340;  //32
-uint16_t spd_adj_120 = 3650;  //34
-uint16_t spd_adj_130 = 4000;  //36
-uint16_t spd_adj_140 = 4095;  //38
-uint16_t spd_adj_150 = 4095;  //40
-uint16_t spd_adj_160 = 4095;  //42
+uint16_t spd_adj_010 = 150;   //012
+uint16_t spd_adj_020 = 400;   //014
+uint16_t spd_adj_030 = 680;   //016
+uint16_t spd_adj_040 = 1010;  //018
+uint16_t spd_adj_050 = 1330;  //020
+uint16_t spd_adj_060 = 1650;  //022
+uint16_t spd_adj_070 = 2000;  //024
+uint16_t spd_adj_080 = 2340;  //026
+uint16_t spd_adj_090 = 2680;  //028
+uint16_t spd_adj_100 = 3020;  //030
+uint16_t spd_adj_110 = 3340;  //032
+uint16_t spd_adj_120 = 3650;  //034
+uint16_t spd_adj_130 = 4000;  //036
+uint16_t spd_adj_140 = 4095;  //038
+uint16_t spd_adj_150 = 4095;  //040
+uint16_t spd_adj_160 = 4095;  //042
 
-uint16_t spd_limit = 120;  //44
+uint16_t spd_limit = 120;  //044 速度上限
 //以上速度計補正値
 
 int16_t bve_current = 0;
-
-int16_t curr_limit = 750;
-
-uint16_t vehicle_res = 500;
-
-uint8_t chat_filter = 0;
-
-//回生モード
-bool curr_kaisei = true;  //true:有効　false:無効
-//計器モード
-bool curr_mode = true;  //true:電圧計 false:電流計
+uint16_t curr_kaisei = true;  //046 回生モード true:有効　false:無効
+uint16_t curr_mode = true;    //048 計器モード true:電圧計 false:電流計
+uint16_t curr_limit = 750;    //050 電流上限
+uint16_t vehicle_res = 500;   //052 列車抵抗
+uint16_t chat_filter = 0;     //054 チャタリングフィルタ[°]
 
 int8_t iDir = 0;
 int8_t iDir_latch = 0;
-String strDir = "";
-String strDir_N = "  ";
+//String strDir = "  ";
+//String strDir_N = "  ";
+char cDir[2] = "  ";
+char cDir_N[2] = "  ";
 bool Horn_1 = 0;
 bool Horn_1_latch = 0;
 bool Horn_2 = 0;
@@ -164,8 +165,12 @@ bool Ats_Cont = 0;
 bool Ats_Conf = 0;
 bool Ats_Cont_latch = 0;
 bool Ats_Conf_latch = 0;
+uint16_t Ats_Cont_flip = 0;  //074 警報持続ボタン反転 0:B接点 1以上:A接点
+uint16_t Ats_Conf_flip = 0;  //076 ATS確認ボタン反転 0:B接点 1以上:A接点
 bool Ats_Rec = 0;
 bool Ats_Rec_latch = 0;
+bool Ats_Pos = 0;
+bool Ats_Pos_latch = 0;
 bool Panto = 0;
 bool Panto_latch = 0;
 bool Light_Def = 0;
@@ -176,12 +181,12 @@ bool Room_Light = 0;
 bool Room_Light_latch = 0;
 bool EB_SW = 0;
 bool EB_SW_latch = 0;
-float adj_N = 0.0;
-float adj_EB = 0.0;
+uint16_t adj_N = 0;
+uint16_t adj_EB = 0;
 
 //以下ブレーキ位置調整用
-uint16_t POT_N = 0;     //00
-uint16_t POT_EB = 512;  //02
+uint16_t POT_N = 0;     //000
+uint16_t POT_EB = 512;  //002
 //以上ブレーキ位置調整用
 
 unsigned long iniMillis_N = 0;
@@ -191,20 +196,6 @@ uint8_t setMode_EB = 0;
 
 bool mode_POT = false;
 
-//ボタン設定
-bool btnSelect = false;
-bool btnStart = false;
-bool btnA = false;
-bool btnB = false;
-bool btnC = false;
-bool btnD = false;
-bool btnSelect_latch = false;
-bool btnStart_latch = false;
-bool btnA_latch = false;
-bool btnB_latch = false;
-bool btnC_latch = false;
-bool btnD_latch = false;
-
 //運転モード
 bool modeBVE = true;
 bool modeN = false;
@@ -213,15 +204,25 @@ bool modeADJ = false;
 //自動ブレーキ帯
 unsigned long bp_millis = 0;
 uint8_t bp_span = 20;
-uint16_t bp_span_down = 20;  //自動帯減圧インターバル
-uint16_t bp_span_up = 20;    //自動帯増圧インターバル
+uint16_t bp_span_down = 20;  //064 自動帯減圧インターバル
+uint16_t bp_span_up = 20;    //066 自動帯増圧インターバル
 uint8_t autoair_notch_brk_latch = 0;
-uint16_t autoair_use = true;    //自動帯使用可否
+uint16_t autoair_use = true;    //068自動帯使用可否
 bool autoair_dir_mask = false;  //自動帯使用時方向切替をマスク
+uint16_t BC_press = 0;          //自動帯他基板より入力された値を格納
+uint16_t RealAutoAir = 1;       //080 実際のエアー圧で自動帯再現
 
 //マスコンノッチ
 uint16_t notch_mc_num_max = 5;
 uint16_t notch_mc_num = 5;
+
+
+uint16_t Auto_Notch_Adjust = 1;  //078自動ノッチ合わせ機構
+
+uint16_t AtsContactUse = 0;  //082 ATS接点判定使用
+uint8_t Ats_In_Count_On = 0;
+uint8_t Ats_In_Count_Off = 0;
+uint16_t Evalve = true;  //084 E制御弁モード
 
 void setup() {
   pinMode(SS_Brk, OUTPUT);  //MCP3008
@@ -239,8 +240,8 @@ void setup() {
 
   Serial.begin(115200);
   Serial1.begin(115200);
-  //Serial.setTimeout(10);
-  //Serial1.setTimeout(10);
+  Serial.setTimeout(10);
+  Serial1.setTimeout(10);
   dac.begin(0x60);
   dac2.begin(0x61);
   Keyboard.begin();
@@ -257,7 +258,7 @@ void setup() {
   //初回書き込みチェック
   int16_t b = 0;
   EEPROM.get(100, b);
-  if ( b != 1) {
+  if (b != 1) {
     EEPROM.put(0, 0);      //POT_N
     EEPROM.put(2, 512);    //POT_EB
     EEPROM.put(4, 8);      //ブレーキ段数設定
@@ -293,16 +294,21 @@ void setup() {
     EEPROM.put(64, 20);    //自動減圧インターバル
     EEPROM.put(66, 20);    //自動増圧インターバル
     EEPROM.put(68, 0);     //自動帯使用可否
-    EEPROM.put(70, 5);
-    EEPROM.put(72, 5);
+    EEPROM.put(70, 5);     //マスコンノッチ最大数
+    EEPROM.put(72, 5);     //マスコンノッチ数(車両)
+    EEPROM.put(74, 0);     //警報持続反転
+    EEPROM.put(76, 0);     //ATS確認反転
+    EEPROM.put(78, 1);     //自動ノッチ合わせ
+    EEPROM.put(80, 0);     //実際のエアー圧で自動帯再現
+    EEPROM.put(82, 0);     //ATS接点情報を他基板へ伝送
     //初回書き込みフラグセット
     EEPROM.put(100, 1);
   } else {
     EEPROM.get(0, POT_N);
     EEPROM.get(2, POT_EB);
-    EEPROM.get(4, notch_brk_num);
-    EEPROM.get(6, brk_sap_angl);
-    EEPROM.get(8, brk_eb_angl);
+    EEPROM.get(4, notch_brk_num);  //ブレーキ段数
+    EEPROM.get(6, brk_sap_angl);   //直通帯幅
+    EEPROM.get(8, brk_eb_angl);    //非常位置
     EEPROM.get(10, brk_full_angl);
     EEPROM.get(12, spd_adj_010);
     EEPROM.get(14, spd_adj_020);
@@ -329,12 +335,20 @@ void setup() {
     EEPROM.get(56, brk_sap_max_angl);
     EEPROM.get(58, brk_sap_min_angl);
     EEPROM.get(60, brk_keep_angl);
-    EEPROM.get(62, brk_keep_full_angl);
-    EEPROM.get(64, bp_span_down);
-    EEPROM.get(66, bp_span_up);
+    EEPROM.get(62, brk_keep_full_angl);  //自動帯常用全開角度
+    EEPROM.get(64, bp_span_down);        //自動帯減圧インターバル
+    EEPROM.get(66, bp_span_up);          //自動帯増圧インターバル
     EEPROM.get(68, autoair_use);
     EEPROM.get(70, notch_mc_num_max);
     EEPROM.get(72, notch_mc_num);
+    EEPROM.get(74, Ats_Cont_flip);      //警報持続ボタン反転 0:B接点 1以上:A接点
+    EEPROM.get(76, Ats_Conf_flip);      //ATS確認ボタン反転 0:B接点 1以上:A接点
+    EEPROM.get(78, Auto_Notch_Adjust);  //自動ノッチ合わせ
+    EEPROM.get(80, RealAutoAir);        //実際のエアー圧で自動帯再現
+    EEPROM.get(82, AtsContactUse);      //ATS接点情報を他基板へ伝送
+
+    Ats_Cont = Ats_Cont_latch = Ats_Cont_flip;
+    Ats_Conf = Ats_Conf_latch = Ats_Conf_flip;
   }
 
   //速度計テスト
@@ -344,370 +358,280 @@ void setup() {
 }
 
 void loop() {
-  //  Serial.println(bve_speed);
-  // LOW = pressed, HIGH = not pressed
-  //シリアルモニタが止まるのを防止するおまじない
-  //BVEモードの時のみシリアル入力を受け付ける
-
-  /*if (Serial1.available() && modeBVE) {
+  if (Serial1.available() > 0) {
     String str1 = Serial1.readStringUntil('\r');
-    if (str1 == "KEY:KEY_HOME") {
-      Keyboard.write(0xD2);
-    } else if (str1.startsWith("KEY:")) {
-      Keyboard.print(str1.substring(4));
+    if (str1.startsWith("BC ") && RealAutoAir) {
+      BC_press = str1.substring(3, 6).toInt();
+    } else {
+      Serial.println(str1);
     }
-    }*/
+  }
   if (Serial.available()) {
     strbve = Serial.readStringUntil('\r');
     uint8_t i = 0;
     String s = "";
-    uint8_t device = strbve.substring(i + 4, i + 6).toInt();
-    uint16_t num = strbve.substring(i + 7, i + 12).toInt();
 
     if (strbve.startsWith("WR ")) {
-      //ブレーキ設定モード
+      //設定モード
+      if (strbve.length() > 7) {
+        uint8_t device = strbve.substring(3, 6).toInt();
+        int16_t num = strbve.substring(7, 12).toInt();
 
-      switch (device) {
+        if (device < 100) {
+          switch (device) {
+            case 0:
+              s = rw_eeprom(device, &num, &POT_N, true, num < 0 || num > 1023);
+              break;
+            case 2:
+              s = rw_eeprom(device, &num, &POT_EB, true, num < 0 || num > 1023);
+              break;
 
-        //ブレーキ段数設定
-        case 4:
-          if (num == 0 || num > 255) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &notch_brk_num, true);
+            //ブレーキ段数
+            case 4:
+              s = rw_eeprom(device, &num, (uint16_t)&notch_brk_num, true, num == 0 || num > 255);
+              break;
+
+            //直通帯幅
+            case 6:
+              s = rw_eeprom(device, &num, (uint16_t)&brk_sap_angl, true, num == 0 || num > brk_eb_angl);
+
+              break;
+
+            //非常位置
+            case 8:
+              s = rw_eeprom(device, &num, (uint16_t)&brk_eb_angl, true, num == 0 || num > brk_full_angl);
+              break;
+
+            //ブレーキ最大角度
+            case 10:
+              s = rw_eeprom(device, &num, (uint16_t)&brk_full_angl, true, num == 0 || num > 255);
+              break;
+
+            //速度計調整
+            case 12:
+              s = rw_eeprom(device, &num, &spd_adj_010, true, false);
+              bve_speed = 100;
+              break;
+            case 14:
+              s = rw_eeprom(device, &num, &spd_adj_020, true, false);
+              bve_speed = 200;
+              break;
+            case 16:
+              s = rw_eeprom(device, &num, &spd_adj_030, true, false);
+              bve_speed = 300;
+              break;
+            case 18:
+              s = rw_eeprom(device, &num, &spd_adj_040, true, false);
+              bve_speed = 400;
+              break;
+            case 20:
+              s = rw_eeprom(device, &num, &spd_adj_050, true, false);
+              bve_speed = 500;
+              break;
+            case 22:
+              s = rw_eeprom(device, &num, &spd_adj_060, true, false);
+              bve_speed = 600;
+              break;
+            case 24:
+              s = rw_eeprom(device, &num, &spd_adj_070, true, false);
+              bve_speed = 700;
+              break;
+            case 26:
+              s = rw_eeprom(device, &num, &spd_adj_080, true, false);
+              bve_speed = 800;
+              break;
+            case 28:
+              s = rw_eeprom(device, &num, &spd_adj_090, true, false);
+              bve_speed = 900;
+              break;
+            case 30:
+              s = rw_eeprom(device, &num, &spd_adj_100, true, false);
+              bve_speed = 1000;
+              break;
+            case 32:
+              s = rw_eeprom(device, &num, &spd_adj_110, true, false);
+              bve_speed = 1100;
+              break;
+            case 34:
+              s = rw_eeprom(device, &num, &spd_adj_120, true, false);
+              bve_speed = 1200;
+              break;
+            case 36:
+              s = rw_eeprom(device, &num, &spd_adj_130, true, false);
+              bve_speed = 1300;
+              break;
+            case 38:
+              s = rw_eeprom(device, &num, &spd_adj_140, true, false);
+              bve_speed = 1400;
+              break;
+            case 40:
+              s = rw_eeprom(device, &num, &spd_adj_150, true, false);
+              bve_speed = 1500;
+              break;
+            case 42:
+              s = rw_eeprom(device, &num, &spd_adj_160, true, false);
+              bve_speed = 1600;
+              break;
+
+            //最高速度設定
+            case 44:
+              s = rw_eeprom(device, &num, &spd_limit, true, num == 0);
+              break;
+
+            //回生モード
+            case 46:
+              s = rw_eeprom(device, &num, (uint16_t)&curr_kaisei, true, num > 1);
+              break;
+
+            //計器モード
+            case 48:
+              s = rw_eeprom(device, &num, (uint16_t)&curr_mode, true, num > 1);
+              break;
+
+            //列車抵抗
+            case 52:
+              s = rw_eeprom(device, &num, &vehicle_res, true, num == 0);
+              break;
+
+            //チャタリング
+            case 54:
+              s = rw_eeprom(device, &num, (uint16_t)&chat_filter, true, num < 0 || num > 3);
+              break;
+
+            //常用最大角度
+            case 56:
+              s = rw_eeprom(device, &num, &brk_sap_max_angl, true, num == 0 || num > brk_sap_angl);
+              break;
+
+            //直通帯最小角度
+            case 58:
+              s = rw_eeprom(device, &num, &brk_sap_min_angl, true, num == 0 || num > brk_sap_max_angl);
+              break;
+            //自動帯常用開始角度
+            case 60:
+              s = rw_eeprom(device, &num, &brk_keep_angl, true, num < brk_sap_max_angl || num > brk_eb_angl);
+              break;
+
+            //自動帯常用全開角度
+            case 62:
+
+              s = rw_eeprom(device, &num, &brk_keep_full_angl, true, num < brk_sap_max_angl || num > brk_eb_angl);
+              break;
+
+            //自動帯減圧インターバル
+            case 64:
+              s = rw_eeprom(device, &num, &bp_span_down, true, num == 0 || num > 100);
+              break;
+
+            //自動帯増圧インターバル
+            case 66:
+              s = rw_eeprom(device, &num, &bp_span_up, true, num == 0 || num > 100);
+              break;
+
+            //自動帯使用可否
+            case 68:
+              s = rw_eeprom(device, &num, &autoair_use, true, num < 0 || num > 1);
+              break;
+
+            //マスコンノッチ最大数
+            case 70:
+              s = rw_eeprom(device, &num, &notch_mc_num_max, true, num < 0);
+              break;
+
+            //マスコンノッチ数(車両)
+            case 72:
+              s = rw_eeprom(device, &num, &notch_mc_num, true, num < 0);
+              break;
+
+              //警報持続ボタン反転 0:B接点 1以上:A接点
+            case 74:
+              s = rw_eeprom(device, &num, (uint16_t)&Ats_Cont_flip, true, num < 0 || num > 1);
+              Ats_Cont_latch = Ats_Cont = Ats_Cont_flip;
+              break;
+
+              //ATS確認ボタン反転 0:B接点 1以上:A接点
+            case 76:
+              s = rw_eeprom(device, &num, (uint16_t)&Ats_Conf_flip, true, num < 0 || num > 1);
+              Ats_Conf_latch = Ats_Conf = Ats_Conf_flip;
+              break;
+
+              //自動ノッチ合わせ
+            case 78:
+              s = rw_eeprom(device, &num, (uint16_t)&Auto_Notch_Adjust, true, num < 0 || num > 1);
+              break;
+
+              //実際のエアー圧で自動帯再現
+            case 80:
+              s = rw_eeprom(device, &num, (uint16_t)&RealAutoAir, true, num < 0 || num > 1);
+              break;
+
+              //ATS接点情報を他基板へ伝送
+            case 82:
+              s = rw_eeprom(device, &num, &AtsContactUse, true, num < 0 || num > 1);
+              break;
+
+            default:
+              s = "E0";
+              break;
           }
-          break;
-
-        //直通帯範囲
-        case 6:
-          if (num == 0 || num > brk_eb_angl) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &brk_sap_angl, true);
-          }
-          break;
-
-        //非常位置
-        case 8:
-          if (num == 0 || num > brk_full_angl) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &brk_eb_angl, true);
-          }
-          break;
-
-        //ブレーキ最大角度
-        case 10:
-          if (num == 0 || num > 255) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &brk_full_angl, true);
-          }
-          break;
-
-        //速度計調整
-        case 12:
-          s = rw_eeprom(device, &num, &spd_adj_010, true);
-          bve_speed = 100;
-          break;
-        case 14:
-          s = rw_eeprom(device, &num, &spd_adj_020, true);
-          bve_speed = 200;
-          break;
-        case 16:
-          s = rw_eeprom(device, &num, &spd_adj_030, true);
-          bve_speed = 300;
-          break;
-        case 18:
-          s = rw_eeprom(device, &num, &spd_adj_040, true);
-          bve_speed = 400;
-          break;
-        case 20:
-          s = rw_eeprom(device, &num, &spd_adj_050, true);
-          bve_speed = 500;
-          break;
-        case 22:
-          s = rw_eeprom(device, &num, &spd_adj_060, true);
-          bve_speed = 600;
-          break;
-        case 24:
-          s = rw_eeprom(device, &num, &spd_adj_070, true);
-          bve_speed = 700;
-          break;
-        case 26:
-          s = rw_eeprom(device, &num, &spd_adj_080, true);
-          bve_speed = 800;
-          break;
-        case 28:
-          s = rw_eeprom(device, &num, &spd_adj_090, true);
-          bve_speed = 900;
-          break;
-        case 30:
-          s = rw_eeprom(device, &num, &spd_adj_100, true);
-          bve_speed = 1000;
-          break;
-        case 32:
-          s = rw_eeprom(device, &num, &spd_adj_110, true);
-          bve_speed = 1100;
-          break;
-        case 34:
-          s = rw_eeprom(device, &num, &spd_adj_120, true);
-          bve_speed = 1200;
-          break;
-        case 36:
-          s = rw_eeprom(device, &num, &spd_adj_130, true);
-          bve_speed = 1300;
-          break;
-        case 38:
-          s = rw_eeprom(device, &num, &spd_adj_140, true);
-          bve_speed = 1400;
-          break;
-        case 40:
-          s = rw_eeprom(device, &num, &spd_adj_150, true);
-          bve_speed = 1500;
-          break;
-        case 42:
-          s = rw_eeprom(device, &num, &spd_adj_160, true);
-          bve_speed = 1600;
-          break;
-
-        //最高速度設定
-        case 44:
-          if (num == 0) {
-            s = "E1 " + device;
-          } else {
-            bve_speed = num * 10;
-            s = rw_eeprom(device, &num, &spd_limit, true);
-          }
-          break;
-
-        //回生モード
-        case 46:
-          if (num > 1) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, (uint16_t)&curr_kaisei, true);
-          }
-          break;
-
-        //計器モード
-        case 48:
-          if (num > 1) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, (uint16_t)&curr_mode, true);
-          }
-          break;
-
-        //列車抵抗
-        case 52:
-          if (num == 0) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &vehicle_res, true);
-          }
-          break;
-
-        //チャタリング
-        case 54:
-          if (num < 0 || num > 3) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, (uint16_t)&chat_filter, true);
-          }
-          break;
-
-        //常用最大角度
-        case 56:
-          if (num == 0 || num > brk_sap_angl) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &brk_sap_max_angl, true);
-          }
-          break;
-
-        //直通帯最小角度
-        case 58:
-          if (num == 0 || num > brk_sap_max_angl) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &brk_sap_min_angl, true);
-          }
-          break;
-        //自動帯重なり位置
-        case 60:
-          if (num < brk_sap_max_angl || num > brk_eb_angl) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &brk_keep_angl, true);
-          }
-          break;
-
-        //自動帯重なり開始位置
-        case 62:
-          if (num < brk_sap_max_angl || num > brk_eb_angl) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &brk_keep_full_angl, true);
-          }
-          break;
-
-        //自動帯減圧インターバル
-        case 64:
-          if (num == 0 || num > 100) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &bp_span_down, true);
-          }
-          break;
-
-        //自動帯増圧インターバル
-        case 66:
-          if (num == 0 || num > 100) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &bp_span_up, true);
-          }
-          break;
-
-        //自動帯使用可否
-        case 68:
-          if (num < 0 || num > 1) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, (uint16_t)&autoair_use, true);
-          }
-          break;
-
-        //マスコンノッチ最大数
-        case 70:
-          if (num < 0) {
-            s = "E1 " + device;
-          } else {
-            s = rw_eeprom(device, &num, &notch_mc_num_max, true);
-          }
-          break;
-
-        //マスコンノッチ数(車両)
-        case 72:
-          if (num < 0) {
-            s = "E1 " + device;;
-          } else {
-            s = rw_eeprom(device, &num, &notch_mc_num, true);
-          }
-          break;
-
-        default:
-          s = "E0";
-          break;
+          Serial.println(s);
+        }
       }
-      Serial.println(s);
 
     } else if (strbve.startsWith("RD ")) {
-      //ブレーキ設定読み出し
-      if (strbve.indexOf("BRK") > 0) {
-        Serial.print("SET READ:BRK_NUM=");
-        Serial.println(notch_brk_num);
-        Serial.print("SET READ:BRK_ANGL=");
-        Serial.println(brk_sap_angl);
-        Serial.print("SET READ:EB_ANGL=");
-        Serial.println(brk_eb_angl);
-        Serial.print("SET READ:BRK_FULL_ANGL=");
-        Serial.println(brk_full_angl);
-        Serial.print("SET READ:BRK_SAP_MAX_ANGL=");
-        Serial.println(brk_sap_max_angl);
-        Serial.print("SET READ:BRK_SAP_MIN_ANGL=");
-        Serial.println(brk_sap_min_angl);
-        Serial.print("SET READ:CHAT_FILTER=");
-        Serial.println(chat_filter);
-        Serial.print("SET READ:BRK_KEEP_ANGL=");
-        Serial.println(brk_keep_angl);
-        Serial.print("SET READ:BRK_KEEP_FULL_ANGL=");
-        Serial.println(brk_keep_full_angl);
-        Serial.print("SET READ:BP_SPAN_DOWN=");
-        Serial.println(bp_span_down);
-        Serial.print("SET READ:BP_SPAN_UP=");
-        Serial.println(bp_span_up);
-        Serial.print("SET READ:AUTOAIR_USE=");
-        Serial.println(autoair_use);
-
-        //速度計設定読み出し
-      } else if (strbve.indexOf("SPD") > 0) {
-        Serial.println("SET READ:SPD");
-        Serial.print("010=");
-        Serial.println(spd_adj_010);
-        Serial.print("020=");
-        Serial.println(spd_adj_020);
-        Serial.print("030=");
-        Serial.println(spd_adj_030);
-        Serial.print("040=");
-        Serial.println(spd_adj_040);
-        Serial.print("050=");
-        Serial.println(spd_adj_050);
-        Serial.print("060=");
-        Serial.println(spd_adj_060);
-        Serial.print("070=");
-        Serial.println(spd_adj_070);
-        Serial.print("080=");
-        Serial.println(spd_adj_080);
-        Serial.print("090=");
-        Serial.println(spd_adj_090);
-        Serial.print("100=");
-        Serial.println(spd_adj_100);
-        Serial.print("110=");
-        Serial.println(spd_adj_110);
-        Serial.print("120=");
-        Serial.println(spd_adj_120);
-        Serial.print("130=");
-        Serial.println(spd_adj_130);
-        Serial.print("140=");
-        Serial.println(spd_adj_140);
-        Serial.print("150=");
-        Serial.println(spd_adj_150);
-        Serial.print("160=");
-        Serial.println(spd_adj_160);
-        Serial.print("Limit=");
-        Serial.println(spd_limit);
-      } else {
-        uint8_t nnn = 0;
-        Serial.println(rw_eeprom(device, 0, (uint16_t)&nnn, false));
+      if (strbve.length() > 5) {
+        uint8_t device = strbve.substring(3, 6).toInt();
+        if (device < 100) {
+          uint8_t nnn = 0;
+          Serial.println(rw_eeprom(device, 0, (uint16_t)&nnn, false, false));
+        }
       }
 
     } else if (strbve.startsWith("MD ")) {
       //模型モード
       if (strbve.indexOf("N   ") > 0) {
         s = "OK N   ";
-        if (num) {
-          modeN = true;
-          notch_brk_num = 8;
-          s += "ON";
-        } else {
-          modeN = false;
-          s += "OFF";
+        if (strbve.length() > 7) {
+          int16_t num = strbve.substring(7, 12).toInt();
+          if (num) {
+            modeN = true;
+            notch_brk_num = 8;
+            s += "ON";
+          } else {
+            modeN = false;
+            s += "OFF";
+          }
         }
       }
 
       //ブレーキ弁調整モード
       else if (strbve.indexOf("ADJ ") > 0) {
         s = "OK ADJ ";
-        if (num) {
-          modeADJ = true;
-          s += "ON";
-        } else {
-          modeADJ = false;
-          s += "OFF";
+        if (strbve.length() > 7) {
+          int16_t num = strbve.substring(7, 12).toInt();
+
+          if (num) {
+            modeADJ = true;
+            s += "ON";
+          } else {
+            modeADJ = false;
+            s += "OFF";
+          }
         }
       }
 
       //ポテンショ読取モード
       else if (strbve.indexOf("POT ") > 0) {
         s = "OK POT ";
-        if (num) {
-          mode_POT = true;
-          s += "ON";
-        } else {
-          mode_POT = false;
-          s += "OFF";
+        if (strbve.length() > 7) {
+          int16_t num = strbve.substring(7, 12).toInt();
+          if (num) {
+            mode_POT = true;
+            s += "ON";
+          } else {
+            mode_POT = false;
+            s += "OFF";
+          }
         }
       } else {
         s = "E0";
@@ -716,9 +640,33 @@ void loop() {
 
     } else {
       //通常モード：速度抽出
-      bve_speed = strbve.substring(0, 4).toInt();
-      bve_door = strbve.substring(5, 6).toInt();
-      bve_current = strbve.substring(7, 12).toInt();
+      if (strbve.length() > 11) {
+        bve_speed = strbve.substring(0, 4).toInt();
+        bve_door = strbve.charAt(5) == '1';
+        bve_current = strbve.substring(7, 12).toInt();
+
+        //自動ノッチ合わせ機構
+        if (strbve.length() > 49) {
+          if (Auto_Notch_Adjust) {
+            if (strbve.charAt(47) == 'B') {
+              int bve_rev = 0;
+              if (strbve.charAt(44) == 'F') {
+                bve_rev = 1;
+              } else if (strbve.charAt(44) == 'B') {
+                bve_rev = -1;
+              }
+              String bve_brk = strbve.substring(48, 50);
+              char Buf[4];
+              bve_brk.toCharArray(Buf, 4);
+              uint8_t num = strtol(Buf, NULL, 16);  //16進数→10進数に変換
+              if (!autoair_dir_mask) {
+                iDir_latch = bve_rev;
+                notch_brk_latch = (notch_brk_num + 1) - num;
+              }
+            }
+          }
+        }
+      }
     }
 
     //電流計
@@ -764,23 +712,24 @@ void loop() {
     //Serial1転送
     //自動帯有効時、電制を無効とする
     if (autoair_use && brk_angl > brk_sap_angl) {
-      strbve.setCharAt(18, '0');
+      if (strbve.length() > 18) {
+        strbve.setCharAt(18, '0');
+      }
+    }
+    if (Ats_Pos && AtsContactUse) {
+      if (strbve.length() > 20) {
+        strbve.setCharAt(20, '1');
+      }
+    }
+    if (Ats_Cont) {
+      if (strbve.length() > 13) {
+        strbve.setCharAt(13, '1');
+      }
     }
     Serial1.print(strbve);
-    Serial1.print("\r");
-
-    /*2022-07-23 解除
-      Serial1.print("BVE Speed: ");
-      Serial1.println(bve_speed);
-      Serial1.print(" Door: ");
-      Serial1.println(bve_door);
-    */
+    Serial1.print('\r');
   }
 
-  /*//読み残しは捨てる
-    if (Serial.available() && modeBVE) {
-    Serial.readStringUntil('\n');
-    }*/
   read_IOexp();          //IOエキスパンダ読込ルーチン
   read_Light_Def();      //減光ライト読込ルーチン
   read_Light();          //前照灯読込ルーチン
@@ -897,7 +846,8 @@ void read_MC(void) {
         if (brk_angl > brk_sap_angl && brk_angl < brk_eb_angl && autoair_use) {
           autoair_dir_mask = true;
           iDir = 0;
-          strDir = "N ";
+          //strDir = "N ";
+          cDir[0] = 'N';
         }
       }
     } else {
@@ -937,15 +887,20 @@ void read_Dir(void) {
   if (!autoair_dir_mask) {
     if (~ioexp_1_AB & (1 << PIN_MC_DIR_F)) {
       iDir = 1;
-      strDir = "F";
-      strDir_N = "L ";
+      //strDir = "F ";
+      cDir[0] = 'F';
+      //strDir_N = "L ";
+      cDir_N[0] = 'L';
     } else if (~ioexp_1_AB & (1 << PIN_MC_DIR_B)) {
       iDir = -1;
-      strDir = "B";
-      strDir_N = "R ";
+      //strDir = "B ";
+      cDir[0] = 'B';
+      //strDir_N = "R ";
+      cDir_N[0] = 'R';
     } else {
       iDir = 0;
-      strDir = "N ";
+      //strDir = "N ";
+      cDir[0] = 'N';
     }
   }
 }
@@ -976,7 +931,8 @@ void read_Break(void) {
 
       //直通帯位置
     } else if (brk_angl < brk_sap_max_angl) {
-      uint8_t temp_notch_brk = round(((float)brk_angl - (float)brk_sap_min_angl) / ((float)brk_sap_max_angl - (float)brk_sap_min_angl) * ((float)notch_brk_num - 1.0) + 0.5);
+      uint16_t temp_notch_brk = round((float)(brk_angl - brk_sap_min_angl) / (float)(brk_sap_max_angl - brk_sap_min_angl) * (notch_brk_num - 1) + 0.5);
+
       notch_brk = notch_brk_num + 1 - temp_notch_brk;
       String s = String(temp_notch_brk);
       notch_brk_name = "B" + s;
@@ -996,7 +952,8 @@ void read_Break(void) {
         if (notch_mc == 50 && notch_mc_H == 100) {
           autoair_dir_mask = true;
           iDir = 0;
-          strDir = "N ";
+          //strDir = "N ";
+          cDir[0] = 'N';
         } else {
           autoair_dir_mask = false;
         }
@@ -1013,7 +970,8 @@ void read_Break(void) {
         if (notch_mc == 50 && notch_mc_H == 100) {
           autoair_dir_mask = true;
           iDir = 0;
-          strDir = "N ";
+          //strDir = "N ";
+          cDir[0] = 'N';
         } else {
           autoair_dir_mask = false;
         }
@@ -1029,7 +987,8 @@ void read_Break(void) {
         if (notch_mc == 50 && notch_mc_H == 100) {
           autoair_dir_mask = true;
           iDir = 0;
-          strDir = "N ";
+          //strDir = "N ";
+          cDir[0] = 'N';
         } else {
           autoair_dir_mask = false;
         }
@@ -1112,22 +1071,31 @@ void keyboard_control(void) {
 #endif
       //力行ノッチ
       if (notch_mc >= 50 && notch_mc_latch >= 50 && notch_mc <= 55 && notch_mc_latch <= 55) {
-        //進段
-        if ((notch_mc - notch_mc_latch) > 0) {
-          for (uint8_t i = 0; i < d; i++) {
+
+        for (uint8_t i = 0; i < d; i++) {
+          //進段
+          if ((notch_mc - notch_mc_latch) > 0) {
             Keyboard.write(0x5A);  //" / "
-#ifdef DEBUG
-            Serial.println("Z");
-#endif
-          }
-        }
-        //戻し
-        if ((notch_mc - notch_mc_latch) < 0) {
-          for (uint8_t i = 0; i < d; i++) {
+            //Serial.println("Z");
+            if (notch_mc == 53) {
+              Serial1.print("ATSM3");
+              Serial1.print('\r');
+            }
+            if (notch_mc == 51) {
+              Serial1.print("ATSM1");
+              Serial1.print('\r');
+            }
+          } else {
             Keyboard.write(0x41);  //" / "
-#ifdef DEBUG
-            Serial.println("A");
-#endif
+            //Serial.println("A");
+            if (notch_mc == 50) {
+              Serial1.print("ATSM0");
+              Serial1.print('\r');
+            }
+            if (notch_mc == 52) {
+              Serial1.print("ATSM2");
+              Serial1.print('\r');
+            }
           }
         }
       }
@@ -1146,21 +1114,14 @@ void keyboard_control(void) {
       //抑速ノッチ
       if (notch_mc_H >= 100 && notch_mc_H_latch >= 100 && notch_mc_H <= 105 && notch_mc_H_latch <= 105) {
         //進段
-        if ((notch_mc_H - notch_mc_H_latch) > 0) {
-          for (uint8_t i = 0; i < d; i++) {
+        for (uint8_t i = 0; i < d; i++) {
+          if ((notch_mc_H - notch_mc_H_latch) > 0) {
             Keyboard.write(0x51);  //" / "
-#ifdef DEBUG
-            Serial.println("Q");
-#endif
-          }
-        }
-        //戻し
-        if ((notch_mc_H - notch_mc_H_latch) < 0) {
-          for (uint8_t i = 0; i < d; i++) {
+            //Serial.println("Q");
+            //戻し
+          } else {
             Keyboard.write(0x41);  //" / "
-#ifdef DEBUG
-            Serial.println("A");
-#endif
+            //Serial.println("A");
           }
         }
       }
@@ -1192,9 +1153,9 @@ void keyboard_control(void) {
 #endif
       //ブレーキノッチ
       if (notch_brk <= (notch_brk_num + 1) && notch_brk_latch <= (notch_brk_num + 1) && notch_brk > 0) {
-        //戻し
-        if ((notch_brk - notch_brk_latch) > 0) {
-          for (uint8_t i = 0; i < d; i++) {
+        for (uint8_t i = 0; i < d; i++) {
+          //戻し
+          if ((notch_brk - notch_brk_latch) > 0) {
             Keyboard.write(0x2C);  //", "
 #ifdef DEBUG
             Serial.println(", ");
@@ -1203,12 +1164,10 @@ void keyboard_control(void) {
         }
         //ブレーキ
         if ((notch_brk - notch_brk_latch) < 0) {
-          for (uint8_t i = 0; i < d; i++) {
-            Keyboard.write(0x2E);  //"."
+          Keyboard.write(0x2E);  //"."
 #ifdef DEBUG
-            Serial.println(".");
+          Serial.println(".");
 #endif
-          }
         }
       }
       if (notch_brk == 0) {
@@ -1231,28 +1190,23 @@ void keyboard_control(void) {
       Serial.print(" iDir: ");
       Serial.print(iDir);
 #endif
-      //前進
-      if ((iDir - iDir_latch) > 0) {
-        for (uint8_t i = 0; i < d; i++) {
+      for (uint8_t i = 0; i < d; i++) {
+        //前進
+        if ((iDir - iDir_latch) > 0) {
           Keyboard.write(0xDA);  //"↑"
-#ifdef DEBUG
-          Serial.println("↑");
-#endif
-        }
-      }
-      //後退
-      if ((iDir - iDir_latch) < 0) {
-        for (uint8_t i = 0; i < d; i++) {
+          //Serial.println("↑");
+          //後進
+        } else {
           Keyboard.write(0xD9);  //"↓"
-#ifdef DEBUG
-          Serial.println("↓");
-#endif
+          //Serial.println("↓");
         }
       }
-      if (modeN) {
-        if (iDir != 0) {
-          Serial.println(strDir_N);
-        }
+    }
+    if (modeN) {
+      if (iDir != 0) {
+        //Serial.println(strDir_N);
+        Serial.print(cDir_N[0]);
+        Serial.println(cDir_N[1]);
       }
     }
   }
@@ -1267,6 +1221,7 @@ void keyboard_control(void) {
 
 //ブレーキ角度調整
 void read_Break_Setting(void) {
+  String s = "";
   uint16_t value = 0;
   bool btn_n = (adcRead(5) < 512);
   bool btn_eb = (adcRead(6) < 512);
@@ -1275,23 +1230,21 @@ void read_Break_Setting(void) {
       adj_N = adcRead(0);
       setMode_N = 1;
       iniMillis_N = millis();
-      Serial.print("POT_N = ");
-      Serial.print(EEPROM.get(0, value));
-      Serial.print(" ADC = ");
-      Serial.println(adj_N);
+      s = "POT_N = ";
+      s += EEPROM.get(0, value);
+      s += " ADC = ";
+      s += adj_N;
     } else if (setMode_N == 1) {
       if (millis() - iniMillis_N > 3000) {
         setMode_N = 2;
-        //Serial.println("Mode_1");
       }
-      adj_N = adj_N * 0.9 + adcRead(0) * 0.1;
-      //Serial.println("Mode_1");
+      adj_N = (adj_N * 9 + adcRead(0)) * 0.1;
     } else if (setMode_N == 2) {
       setMode_N = 0;
-      POT_N = (uint16_t)adj_N;
+      POT_N = adj_N;
       EEPROM.put(0, POT_N);
-      Serial.print("NEW POT_N = ");
-      Serial.println(POT_N);
+      s = "NEW POT_N = ";
+      s += POT_N;
     }
   } else {
     setMode_N = 0;
@@ -1302,26 +1255,29 @@ void read_Break_Setting(void) {
       adj_EB = adcRead(0);
       setMode_EB = 1;
       iniMillis_EB = millis();
-      Serial.print("POT_EB = ");
-      Serial.print(EEPROM.get(2, value));
-      Serial.print(" ADC = ");
-      Serial.println(adj_EB);
+      s = "POT_EB = ";
+      s += EEPROM.get(2, value);
+      s += " ADC = ";
+      s += adj_EB;
     } else if (setMode_EB == 1) {
       if (millis() - iniMillis_EB > 3000) {
         setMode_EB = 2;
         //Serial.println("Mode_1");
       }
-      adj_EB = adj_EB * 0.9 + adcRead(0) * 0.1;
+      adj_EB = (adj_EB * 9 + adcRead(0)) * 0.1;
       //Serial.println("Mode_1");
     } else if (setMode_EB == 2) {
       setMode_EB = 0;
-      POT_EB = (uint16_t)adj_EB;
+      POT_EB = adj_EB;
       EEPROM.put(2, POT_EB);
-      Serial.print("NEW POT_EB = ");
-      Serial.println(POT_EB);
+      s = "NEW POT_EB = ";
+      s += POT_EB;
     }
   } else {
     setMode_EB = 0;
+  }
+  if (s != "") {
+    Serial.println(s);
   }
 }
 
@@ -1356,17 +1312,62 @@ void read_Horn(void) {
 }
 
 void read_Ats(void) {
+
+  //ATS誤作動防止
+  bool Ats_In = (adcRead(1) < 1);
+  if (Ats_In) {
+    Ats_In_Count_On++;
+    Ats_In_Count_Off = 0;
+  } else {
+    Ats_In_Count_Off++;
+    Ats_In_Count_On = 0;
+  }
+  if (Ats_In_Count_On > 10) {
+    Ats_Pos = true;
+  } else if (Ats_In_Count_Off > 10) {
+    Ats_Pos = false;
+  }
+
+  if (AtsContactUse) {
+    if (Ats_Pos && !Ats_Pos_latch) {
+      Serial1.print("ATS 1");
+      Serial1.print("\r");
+      Serial.println("ATS 1 ON");
+    } else if (!Ats_Pos && Ats_Pos_latch) {
+      Serial1.print("ATS 0");
+      Serial1.print("\r");
+      Serial.println("ATS 0 OFF");
+    }
+  }
+  Ats_Pos_latch = Ats_Pos;
+
   //ATS警報持続
-  Ats_Cont = ~ioexp_1_AB & (1 << PIN_ATS_CONT);
+  if (Ats_Cont_flip) {
+    Ats_Cont = ioexp_1_AB & (1 << PIN_ATS_CONT);
+  } else {
+    Ats_Cont = ~ioexp_1_AB & (1 << PIN_ATS_CONT);
+  }
   if (Ats_Cont != Ats_Cont_latch) {
     if (Ats_Cont) {
       if (modeBVE) {
-        if (adcRead(1) < 1) {
-          Keyboard.press(0xD1);  //"Insert"
-        }
+        //ATS警報持続ボタン押下時、点灯
+        /*strbve.setCharAt(13, '1');
+        Send_Serial1(strbve);*/
+        Serial1.print("ACT 1");
+        Serial1.print("\r");
+        Serial.println("ACT 1 ON");
+
+        Keyboard.press(0xD1);  //"Insert"
       }
     } else {
       if (modeBVE) {
+        //ATS警報持続ボタン、消灯
+        /*strbve.setCharAt(13, '/');
+        Send_Serial1(strbve);*/
+        Serial1.print("ACT 0");
+        Serial1.print("\r");
+        Serial.println("ACT 0 ON");
+
         Keyboard.release(0xD1);
       }
     }
@@ -1374,16 +1375,35 @@ void read_Ats(void) {
   Ats_Cont_latch = Ats_Cont;
 
   //ATS確認
-  Ats_Conf = ~ioexp_1_AB & (1 << PIN_ATS_CONF);
+  if (Ats_Conf_flip) {
+    Ats_Conf = ioexp_1_AB & (1 << PIN_ATS_CONF);
+  } else {
+    Ats_Conf = ~ioexp_1_AB & (1 << PIN_ATS_CONF);
+  }
+
   if (Ats_Conf != Ats_Conf_latch) {
     if (Ats_Conf) {
       if (modeBVE) {
-        if (adcRead(1) < 1) {
+        if (Ats_Pos) {
+          //ATS確認ボタン押下時、消灯
+          /*strbve.setCharAt(14, '0');
+            Send_Serial1(strbve);*/
+          Serial1.print("ACF 1");
+          Serial1.print("\r");
+          Serial.println("ACF 1 ON");
+
           Keyboard.press(0x20);  //"Space"
         }
       }
     } else {
       if (modeBVE) {
+        //ATS確認ボタン、点灯
+        /*strbve.setCharAt(14, '1');
+          Send_Serial1(strbve);*/
+        Serial1.print("ACF 0");
+        Serial1.print("\r");
+        Serial.println("ACF 0 OFF");
+
         Keyboard.release(0x20);
       }
     }
@@ -1395,9 +1415,7 @@ void read_Ats(void) {
   if (Ats_Rec != Ats_Rec_latch) {
     if (Ats_Rec) {
       if (modeBVE) {
-        //if (adcRead(1) < 1) {
         Keyboard.press(0xD2);  //"Home"
-        //}
       }
     } else {
       if (modeBVE) {
@@ -1514,40 +1532,42 @@ void disp_SpeedMeter(uint16_t spd, uint16_t limit) {
 
 void BP(uint16_t angl) {
 
-  //BPの増減圧インターバルを設定
-  if (angl < brk_keep_angl) {
-    bp_span = bp_span_up;
-  } else if ((angl >= brk_keep_angl) && (angl <= brk_keep_full_angl)) {
-    bp_span = map(angl, brk_keep_angl, brk_keep_full_angl, bp_span_down, bp_span_down);
-  } else if (angl > brk_keep_full_angl) {
-    bp_span = bp_span_down;
-  }
-
-  //直通帯(運転位置)でBP圧を加圧
-  if (angl < brk_sap_angl) {
-    if ((millis() - bp_millis) > bp_span && brk_bp_press < 490) {
-      brk_bp_press++;
-      bp_millis = millis();
+  if (!RealAutoAir) {
+    //BPの増減圧インターバルを設定
+    if (angl < brk_keep_angl) {
+      bp_span = bp_span_up;
+    } else if ((angl >= brk_keep_angl) && (angl <= brk_keep_full_angl)) {
+      bp_span = map(angl, brk_keep_angl, brk_keep_full_angl, bp_span_down, bp_span_down);
+    } else if (angl > brk_keep_full_angl) {
+      bp_span = bp_span_down;
     }
-    //重なり位置でBP圧は維持
-  } else if (brk_angl < brk_keep_angl) {
 
-    //常用位置でBP圧を減圧
-  } else {
-    if ((millis() - bp_millis) > bp_span && brk_bp_press > 0) {
-      brk_bp_press--;
-      bp_millis = millis();
+    //直通帯(運転位置)でBP圧を加圧
+    if (angl < brk_sap_angl) {
+      if ((millis() - bp_millis) > bp_span && brk_bp_press < 490) {
+        brk_bp_press++;
+        bp_millis = millis();
+      }
+      //重なり位置でBP圧は維持
+    } else if (brk_angl < brk_keep_angl) {
+
+      //常用位置でBP圧を減圧
+    } else {
+      if ((millis() - bp_millis) > bp_span && brk_bp_press > 0) {
+        brk_bp_press--;
+        bp_millis = millis();
+      }
     }
-  }
 
-  //自動帯でのBC圧をBP圧より生成
-  uint16_t autoair_bc_press = (490 - brk_bp_press) * 2.5;
-  if (autoair_bc_press > 440) {
-    autoair_bc_press = 440;
+    //自動帯でのBC圧をBP圧より生成
+    BC_press = (490 - brk_bp_press) * 2.5;
+    if (BC_press > 440) {
+      BC_press = 440;
+    }
   }
 
   //BC圧からブレーキノッチに変換
-  autoair_notch_brk = map(autoair_bc_press, 0, 440, notch_brk_num + 1, 1);
+  autoair_notch_brk = map(BC_press, 0, 400, notch_brk_num + 1, 1);
 
   //自動帯圧力優先シーケンス
   //N位置
@@ -1572,23 +1592,34 @@ void BP(uint16_t angl) {
   }
 }
 
-String rw_eeprom(uint8_t dev, uint16_t *n, int *param, bool write) {
-  if (write) {
-    *param = *n;
-    EEPROM.put(dev, *param);
-  } else {
-    EEPROM.get(dev, *param);
-  }
+String rw_eeprom(uint16_t dev, uint16_t *n, uint16_t *param, bool write, bool NGcondition) {
   String s = "OK ";
-  if (dev < 100) {
-    s += "0";
-  }
-  if (dev < 10) {
-    s += "0";
-  }
-  s += dev;
-  s += " ";
-  s += *param;
+  if (!NGcondition) {
+    if (write) {
+      *param = *n;
+      EEPROM.put(dev, *param);
+    } else {
+      EEPROM.get(dev, *param);
+    }
 
+    if (dev < 100) {
+      s += "0";
+    }
+    if (dev < 10) {
+      s += "0";
+    }
+    s += dev;
+    s += " ";
+    s += *param;
+  } else {
+    s = "E1 " + dev;
+  }
   return s;
+}
+
+void Send_Serial1(String _str) {
+  if (_str.charAt(4) == '/') {
+    Serial1.print(_str);
+    Serial1.print("\r");
+  }
 }
