@@ -28,7 +28,7 @@
 > [!TIP]
 >- Serial1出力と5V出力は、表示灯類など拡張用のために用います。
 >- Serial1出力(Tx)：USBからのSerial電文をそのままSerial1から他基板へ渡します。
->- Serial1入力(Rx):他基板から本基板へ信号を渡します。(※現時点で実装無し)
+>- Serial1入力(Rx):他基板(表示基板など)から本基板へ信号を渡します。
 
 ## BVEとの連動方法
 > [こちら](https://github.com/GraphTechKEN/SerialOutputEx)を参照してください。
