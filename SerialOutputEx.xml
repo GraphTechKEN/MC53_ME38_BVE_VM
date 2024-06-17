@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <OutputInfo xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
-  <PortNum>9</PortNum>
+  <PortNum>20</PortNum>
   <BaudRate>115200</BaudRate>
   <Parity>None</Parity>
   <StopBits>One</StopBits>
