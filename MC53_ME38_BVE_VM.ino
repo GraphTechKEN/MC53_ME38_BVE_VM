@@ -244,80 +244,67 @@ void setup() {
   int16_t b = 0;
   EEPROM.get(100, b);
   if (b != 1) {
-    EEPROM.put(0, 0);      //POT_N
-    EEPROM.put(2, 512);    //POT_EB
-    EEPROM.put(4, 8);      //ブレーキ段数設定
-    EEPROM.put(6, 80);     //直通帯範囲
-    EEPROM.put(8, 150);    //非常位置
-    EEPROM.put(10, 165);   //ブレーキ最大角度
-    EEPROM.put(12, 150);   //10km/h
-    EEPROM.put(14, 400);   //20km/h
-    EEPROM.put(16, 680);   //30km/h
-    EEPROM.put(18, 1010);  //40km/h
-    EEPROM.put(20, 1330);  //50km/h
-    EEPROM.put(22, 1650);  //60km/h
-    EEPROM.put(24, 2000);  //70km/h
-    EEPROM.put(26, 2340);  //80km/h
-    EEPROM.put(28, 2680);  //90km/h
-    EEPROM.put(30, 3020);  //100km/h
-    EEPROM.put(32, 3340);  //110km/h
-    EEPROM.put(34, 3650);  //120km/h
-    EEPROM.put(36, 4000);  //130km/h
-    EEPROM.put(38, 4095);  //140km/h
-    EEPROM.put(40, 4095);  //150km/h
-    EEPROM.put(42, 4095);  //160km/h
-    EEPROM.put(44, 120);   //速度計上限
-    EEPROM.put(46, 1);     //回生モード
-    EEPROM.put(48, 1);     //計器モード
-    EEPROM.put(50, 750);   //電流値上限
-    EEPROM.put(52, 500);   //列車抵抗
-    EEPROM.put(54, 1);     //チャタリング
-    EEPROM.put(56, 67);    //直通帯最大角度
-    EEPROM.put(58, 3);     //直通帯最小角度
-    EEPROM.put(60, 130);   //自動帯重なり開始位置
-    EEPROM.put(62, 135);   //自動帯重なり全開位置
-    EEPROM.put(64, 20);    //自動減圧インターバル
-    EEPROM.put(66, 20);    //自動増圧インターバル
-    EEPROM.put(68, 0);     //自動帯使用可否
-    EEPROM.put(70, 5);     //マスコンノッチ最大数
-    EEPROM.put(72, 5);     //マスコンノッチ数(車両)
-    EEPROM.put(74, 0);     //警報持続反転
-    EEPROM.put(76, 0);     //ATS確認反転
-    EEPROM.put(78, 1);     //自動ノッチ合わせ
-    EEPROM.put(80, 0);     //実際のエアー圧で自動帯再現
-    EEPROM.put(82, 0);     //ATS接点情報を他基板へ伝送
+    EEPROM.put(0, POT_N);                    //POT_N
+    EEPROM.put(2, POT_EB);                   //POT_EB
+    EEPROM.put(4, notch_brk_num);            //ブレーキ段数設定
+    EEPROM.put(6, brk_sap_angl);             //直通帯範囲
+    EEPROM.put(8, brk_eb_angl);              //非常位置
+    EEPROM.put(10, brk_full_angl);           //ブレーキ最大角度
+    for (int i = 1; i <= 16; i++) {          //速度計補正値
+      EEPROM.put((i * 2) + 10, spd_adj[i]);  //
+    }                                        //
+    EEPROM.put(44, spd_limit);               //速度計上限
+    EEPROM.put(46, curr_kaisei);             //回生モード
+    EEPROM.put(48, curr_mode);               //計器モード
+    EEPROM.put(50, curr_limit);              //電流値上限
+    EEPROM.put(52, vehicle_res);             //列車抵抗
+    EEPROM.put(54, chat_filter);             //チャタリング
+    EEPROM.put(56, brk_sap_max_angl);        //直通帯最大角度
+    EEPROM.put(58, brk_sap_min_angl);        //直通帯最小角度
+    EEPROM.put(60, brk_keep_angl);           //自動帯重なり開始位置
+    EEPROM.put(62, brk_keep_full_angl);      //自動帯常用全開角度
+    EEPROM.put(64, bp_span_down);            //自動帯減圧インターバル
+    EEPROM.put(66, bp_span_up);              //自動帯増圧インターバル
+    EEPROM.put(68, autoair_use);             //自動帯使用可否
+    EEPROM.put(70, notch_mc_num_max);        //マスコンノッチ最大数
+    EEPROM.put(72, notch_mc_num);            //マスコンノッチ数(車両)
+    EEPROM.put(74, Ats_Cont_flip);           //警報持続ボタン反転 0:B接点 1以上:A接点
+    EEPROM.put(76, Ats_Conf_flip);           //ATS確認ボタン反転 0:B接点 1以上:A接点
+    EEPROM.put(78, Auto_Notch_Adjust);       //自動ノッチ合わせ
+    EEPROM.put(80, RealAutoAir);             //実際のエアー圧で自動帯再現
+    EEPROM.put(82, AtsContactUse);           //ATS接点情報を他基板へ伝送
     //初回書き込みフラグセット
     EEPROM.put(100, 1);
   } else {
-    EEPROM.get(0, POT_N);
-    EEPROM.get(2, POT_EB);
-    EEPROM.get(4, notch_brk_num);  //ブレーキ段数
-    EEPROM.get(6, brk_sap_angl);   //直通帯幅
-    EEPROM.get(8, brk_eb_angl);    //非常位置
-    EEPROM.get(10, brk_full_angl);
-    for (int i = 1; i <= 16; i++) {
-      EEPROM.get((i * 2) + 10, spd_adj[i]);
-    }
-    EEPROM.get(44, spd_limit);
-    EEPROM.get(46, curr_kaisei);
-    EEPROM.get(48, curr_mode);
-    EEPROM.get(50, curr_limit);
-    EEPROM.get(52, vehicle_res);
-    EEPROM.get(54, chat_filter);
-    EEPROM.get(56, brk_sap_max_angl);
-    EEPROM.get(58, brk_sap_min_angl);
-    EEPROM.get(60, brk_keep_angl);
-    EEPROM.get(62, brk_keep_full_angl);  //自動帯常用全開角度
-    EEPROM.get(64, bp_span_down);        //自動帯減圧インターバル
-    EEPROM.get(66, bp_span_up);          //自動帯増圧インターバル
-    EEPROM.get(68, autoair_use);         //自動帯使用可否
-    EEPROM.get(70, notch_mc_num_max);    //マスコンノッチ最大数
-    EEPROM.get(72, notch_mc_num);        //マスコンノッチ数(車両)
-    EEPROM.get(74, Ats_Cont_flip);       //警報持続ボタン反転 0:B接点 1以上:A接点
-    EEPROM.get(76, Ats_Conf_flip);       //ATS確認ボタン反転 0:B接点 1以上:A接点
-    EEPROM.get(78, Auto_Notch_Adjust);   //自動ノッチ合わせ
-    EEPROM.get(80, RealAutoAir);         //実際のエアー圧で自動帯再現
-    EEPROM.get(82, AtsContactUse);       //ATS接点情報を他基板へ伝送
+    EEPROM.get(0, POT_N);                    //POT_N
+    EEPROM.get(2, POT_EB);                   //POT_EB
+    EEPROM.get(4, notch_brk_num);            //ブレーキ段数
+    EEPROM.get(6, brk_sap_angl);             //直通帯幅
+    EEPROM.get(8, brk_eb_angl);              //非常位置
+    EEPROM.get(10, brk_full_angl);           //ブレーキ最大角度
+    for (int i = 1; i <= 16; i++) {          //速度計補正値
+      EEPROM.get((i * 2) + 10, spd_adj[i]);  //
+    }                                        //
+    EEPROM.get(44, spd_limit);               //速度計上限
+    EEPROM.get(46, curr_kaisei);             //回生モード
+    EEPROM.get(48, curr_mode);               //計器モード
+    EEPROM.get(50, curr_limit);              //電流値上限
+    EEPROM.get(52, vehicle_res);             //列車抵抗
+    EEPROM.get(54, chat_filter);             //チャタリング
+    EEPROM.get(56, brk_sap_max_angl);        //直通帯最大角度
+    EEPROM.get(58, brk_sap_min_angl);        //直通帯最小角度
+    EEPROM.get(60, brk_keep_angl);           //自動帯重なり開始位置
+    EEPROM.get(62, brk_keep_full_angl);      //自動帯常用全開角度
+    EEPROM.get(64, bp_span_down);            //自動帯減圧インターバル
+    EEPROM.get(66, bp_span_up);              //自動帯増圧インターバル
+    EEPROM.get(68, autoair_use);             //自動帯使用可否
+    EEPROM.get(70, notch_mc_num_max);        //マスコンノッチ最大数
+    EEPROM.get(72, notch_mc_num);            //マスコンノッチ数(車両)
+    EEPROM.get(74, Ats_Cont_flip);           //警報持続ボタン反転 0:B接点 1以上:A接点
+    EEPROM.get(76, Ats_Conf_flip);           //ATS確認ボタン反転 0:B接点 1以上:A接点
+    EEPROM.get(78, Auto_Notch_Adjust);       //自動ノッチ合わせ
+    EEPROM.get(80, RealAutoAir);             //実際のエアー圧で自動帯再現
+    EEPROM.get(82, AtsContactUse);           //ATS接点情報を他基板へ伝送
     Ats_Cont = Ats_Cont_latch = Ats_Cont_flip;
     Ats_Conf = Ats_Conf_latch = Ats_Conf_flip;
   }
