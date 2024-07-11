@@ -94,13 +94,7 @@ Adafruit_MCP4725 dac2;
 SPISettings settings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
 
 uint16_t ioexp_1_AB = 0;
-
-String strbve = "0000/1/ 00000/100000/0000000000000000000001";
-String strbve_latch = "";
 uint16_t bve_speed = 0;
-
-uint8_t mcBit = 0;                 //MCP23S17読込
-uint8_t mcBit_latch = 0;           //MCP23S17読込格納
 uint8_t notch_mc = 0;              //マスコンノッチ
 uint8_t notch_mc_latch = 0;        //マスコンノッチ格納
 uint8_t notch_mc_H = 0;            //抑速ノッチ
@@ -112,8 +106,7 @@ uint8_t notch_brk_latch = 0;       //ブレーキノッチ格納
 String notch_brk_name = "";        //ブレーキノッチ名称
 String notch_brk_name_latch = "";  //ブレーキノッチ名称格納
 //以下ブレーキ設定値
-uint16_t adc = 0;                   //MCP3008ポテンショデータ
-uint16_t adc_latch = 0;             //MCP3008ポテンショデータ格納
+
 uint16_t notch_brk_num = 8;         //004 常用ブレーキ段数
 uint16_t brk_sap_angl = 80;         //006 直通帯の角度
 uint16_t brk_eb_angl = 150;         //008 非常位置
@@ -132,7 +125,7 @@ uint16_t spd_adj[18] = { 0, 150, 400, 680, 1010, 1330, 1650, 2000, 2340, 2680, 3
 uint16_t spd_limit = 120;  //044 速度上限
 //以上速度計補正値
 
-int16_t bve_current = 0;
+
 uint16_t curr_kaisei = true;  //046 回生モード true:有効　false:無効
 uint16_t curr_mode = true;    //048 計器モード true:電圧計 false:電流計
 uint16_t curr_limit = 750;    //050 電流上限
@@ -164,29 +157,10 @@ uint16_t Ats_Conf_flip = 0;    //076 ATS確認ボタン反転 0:B接点 1以上:
 uint16_t AtsContactUse = 0;    //082 ATS接点判定使用
 //ATS
 
-bool Panto = 0;
-bool Panto_latch = 0;
-bool Light_Def = 0;
-bool Light_Def_latch = 0;
-bool Light_On = 0;
-bool Light_On_latch = 0;
-bool Room_Light = 0;
-bool Room_Light_latch = 0;
-bool EB_SW = 0;
-bool EB_SW_latch = 0;
-
 //以下ブレーキ位置調整用
-uint16_t adj_N = 0;
-uint16_t adj_EB = 0;
-unsigned long iniMillis_N = 0;
-unsigned long iniMillis_EB = 0;
 uint16_t POT_N = 0;     //000
 uint16_t POT_EB = 512;  //002
 //以上ブレーキ位置調整用
-
-
-uint8_t setMode_N = 0;
-uint8_t setMode_EB = 0;
 
 bool mode_POT = false;
 
@@ -209,7 +183,6 @@ uint16_t RealAutoAir = 1;        //080 実際のエアー圧で自動帯再現
 uint16_t notch_mc_num_max = 5;   //070マスコンノッチ最大数
 uint16_t notch_mc_num = 5;       //072マスコンノッチ数(車両)
 uint16_t Auto_Notch_Adjust = 1;  //078自動ノッチ合わせ機構
-
 
 void setup() {
   pinMode(SS_Brk, OUTPUT);   //MCP3008
@@ -316,8 +289,11 @@ void setup() {
 }
 
 void loop() {
+  static String strbve = "0000/1/ 00000/100000/0000000000000000000001";
+  static String strbve_latch = "";
+  static int16_t bve_current = 0;
   read_Serial1();
-  read_USB();
+  read_USB(&strbve);
 
   if (strbve != strbve_latch) {
     uint8_t i = 0;
@@ -393,7 +369,7 @@ void loop() {
       Serial.println(s);
 
     } else {
-      //通常モード：速度抽出
+      //通常モード：速度、戸閉、電流抽出
       if (strbve.length() > 11) {
         bve_speed = strbve.substring(0, 4).toInt();
 
@@ -402,7 +378,7 @@ void loop() {
         bve_current = strbve.substring(7, 12).toInt();
 
         //自動ノッチ合わせ機構
-        AutoNotch();
+        AutoNotch(&strbve);
       }
     }
 
@@ -410,11 +386,11 @@ void loop() {
     disp_SpeedMeter(bve_speed);
 
     //電流計
-    disp_CurrentMeter();
+    disp_CurrentMeter(bve_current);
 
 
     //Serial1転送
-    send_Serial1();
+    send_Serial1(&strbve);
     strbve_latch = strbve;
   }
 
@@ -478,7 +454,8 @@ uint16_t adcRead(uint8_t ch) {  // 0 .. 7
 
 //MCP23S17マスコンノッチ状態読込 (MC53抑速ブレーキ対応)
 void read_MC(void) {
-  mcBit = ioexp_1_AB;
+  uint8_t mcBit = ioexp_1_AB;      //MCP23S17読込
+  static uint8_t mcBit_latch = 0;  //MCP23S17読込格納
   if (mcBit != mcBit_latch) {
     if (ioexp_1_AB & (1 << PIN_MC_DEC)) {
       if (~ioexp_1_AB & (1 << PIN_MC_5)) {
@@ -562,8 +539,9 @@ void read_Dir(void) {
 }
 
 //ブレーキ角度読取
-void read_Break(void) {
-  adc = adcRead(0);
+uint16_t read_Break(void) {
+  uint16_t adc = adcRead(0);
+  static uint16_t adc_latch = 0;
   if (adc < POT_N) {
     adc = POT_N;
   } else if (adc > POT_EB) {
@@ -670,7 +648,7 @@ void read_Break(void) {
   }
 
   if (autoair_use) {
-    BP(brk_angl);
+    BP(&brk_angl);
   }
 
   //ポテンショ生データ表示モード
@@ -829,6 +807,12 @@ void keyboard_control(void) {
 
 //ブレーキ角度調整
 void read_Break_Setting(void) {
+  static uint16_t adj_N = 0;
+  static uint16_t adj_EB = 0;
+  static unsigned long iniMillis_N = 0;
+  static unsigned long iniMillis_EB = 0;
+  static uint8_t setMode_N = 0;
+  static uint8_t setMode_EB = 0;
   String s = "";
   uint16_t value = 0;
   bool btn_n = (adcRead(5) < 512);
@@ -1021,8 +1005,8 @@ void read_Ats(void) {
 }
 
 void read_Panto(void) {
-
-  Panto = ~ioexp_1_AB & (1 << PIN_PANTO);
+  bool Panto = ~ioexp_1_AB & (1 << PIN_PANTO);
+  static bool Panto_latch = 0;
   if (Panto != Panto_latch) {
     if (Panto) {
       if (modeBVE) {
@@ -1063,8 +1047,8 @@ void read_Light(void) {
 }
 
 void read_EB(void) {
-
-  EB_SW = !digitalRead(5);
+  bool EB_SW = !digitalRead(5);
+  static bool EB_SW_latch = 0;
   if (EB_SW != EB_SW_latch) {
     if (EB_SW) {
       if (modeBVE) {
@@ -1095,26 +1079,26 @@ void disp_SpeedMeter(uint16_t spd) {
   dac.setVoltage(volt, false);
 }
 
-void BP(uint16_t angl) {
+void BP(uint8_t *angl) {
 
   if (!RealAutoAir) {
     //BPの増減圧インターバルを設定
-    if (angl < brk_keep_angl) {
+    if (*angl < brk_keep_angl) {
       bp_span = bp_span_up;
-    } else if ((angl >= brk_keep_angl) && (angl <= brk_keep_full_angl)) {
+    } else if ((*angl >= brk_keep_angl) && (*angl <= brk_keep_full_angl)) {
       bp_span = map(angl, brk_keep_angl, brk_keep_full_angl, bp_span_down, bp_span_down);
-    } else if (angl > brk_keep_full_angl) {
+    } else if (*angl > brk_keep_full_angl) {
       bp_span = bp_span_down;
     }
 
     //直通帯(運転位置)でBP圧を加圧
-    if (angl < brk_sap_angl) {
+    if (*angl < brk_sap_angl) {
       if ((millis() - bp_millis) > bp_span && brk_bp_press < 490) {
         brk_bp_press++;
         bp_millis = millis();
       }
       //重なり位置でBP圧は維持
-    } else if (brk_angl < brk_keep_angl) {
+    } else if (*angl < brk_keep_angl) {
 
       //常用位置でBP圧を減圧
     } else {
@@ -1132,30 +1116,26 @@ void BP(uint16_t angl) {
   }
 
   //BC圧からブレーキノッチに変換
-  //autoair_notch_brk = map(BC_press, 0, 400, notch_brk_num + 1, 1);
   autoair_notch_brk = map(BC_press, 0, 400, 0, notch_brk_num);
 
   //自動帯圧力優先シーケンス
   //N位置
-  if (brk_angl <= brk_sap_min_angl) {
+  if (*angl <= brk_sap_min_angl) {
     //自動ブレーキ
-    //if (autoair_notch_brk <= notch_brk_num + 1) {  //自動ブレーキ帯の段数が高いとき
     if (autoair_notch_brk >= 0) {  //自動ブレーキ帯の段数が(N位置より)高いとき
       notch_brk = autoair_notch_brk;
     }
     //直通帯位置
-  } else if (brk_angl < brk_sap_angl) {
+  } else if (*angl < brk_sap_angl) {
     //自動ブレーキ
-    //if (notch_brk > autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
     if (notch_brk < autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
 
       notch_brk = autoair_notch_brk;
     }
 
     //自動帯
-  } else if (brk_angl < brk_eb_angl) {
-    //自動ブレーキ
-    //if (notch_brk > autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
+  } else if (*angl < brk_eb_angl) {  //自動ブレーキ
+
     if (notch_brk < autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
       notch_brk = autoair_notch_brk;
     }
@@ -1187,24 +1167,17 @@ String rw_eeprom(uint16_t dev, uint16_t *n, uint16_t *param, bool write, bool NG
   return s;
 }
 
-void Send_Serial1(String _str) {
-  if (_str.charAt(4) == '/') {
-    Serial1.print(_str);
-    Serial1.print("\r");
-  }
-}
-
-void AutoNotch() {
-  if (strbve.length() > 49) {
+void AutoNotch(String *str) {
+  if (str->length() > 49) {
     if (Auto_Notch_Adjust) {
-      if (strbve.charAt(47) == 'B') {
+      if (str->charAt(47) == 'B') {
         int bve_rev = 0;
-        if (strbve.charAt(44) == 'F') {
+        if (str->charAt(44) == 'F') {
           bve_rev = 1;
-        } else if (strbve.charAt(44) == 'B') {
+        } else if (str->charAt(44) == 'B') {
           bve_rev = -1;
         }
-        String bve_brk = strbve.substring(48, 50);
+        String bve_brk = str->substring(48, 50);
         char Buf[4];
         bve_brk.toCharArray(Buf, 4);
         uint8_t num = strtol(Buf, NULL, 16);  //16進数→10進数に変換
@@ -1218,22 +1191,22 @@ void AutoNotch() {
   }
 }
 
-void disp_CurrentMeter() {
-  if (!curr_kaisei && (bve_current < 0)) {
-    bve_current = 0;
+void disp_CurrentMeter(int16_t current) {
+  if (!curr_kaisei && (current < 0)) {
+    current = 0;
   }
   if (curr_mode) {
-    uint16_t v = 1500 - (bve_current * (vehicle_res / 1000.0));
+    uint16_t v = 1500 - (current * (vehicle_res / 1000.0));
     if (v > 2000) {
       v = 2000;
     }
     dac2.setVoltage(map(v, 0, 2000, 0, 4095), false);
   } else {
-    int current = abs(bve_current);
-    if (current > curr_limit) {
-      current = curr_limit;
+    int curr = abs(current);
+    if (curr > curr_limit) {
+      curr = curr_limit;
     }
-    dac2.setVoltage(map(current, 0, curr_limit, 0, 4095), false);
+    dac2.setVoltage(map(curr, 0, curr_limit, 0, 4095), false);
   }
 }
 
@@ -1248,20 +1221,20 @@ void read_Serial1() {
   }
 }
 
-void read_USB() {
+void read_USB(String *str) {
   if (Serial.available()) {
-    strbve = Serial.readStringUntil('\r');
+    *str = Serial.readStringUntil('\r');
   }
 }
 
-void send_Serial1() {
+void send_Serial1(String *str) {
   //自動帯有効時、電制を無効とする
   if (autoair_use && brk_angl > brk_sap_angl) {
-    if (strbve.length() > 18) {
-      strbve.setCharAt(18, '0');
+    if (str->length() > 18) {
+      str->setCharAt(18, '0');
     }
   }
-  Serial1.print(strbve);
+  Serial1.print(*str);
   Serial1.print('\r');
 }
 
