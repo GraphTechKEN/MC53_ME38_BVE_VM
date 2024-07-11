@@ -47,6 +47,7 @@
 //MC53_ME38_BVE_VM_V4.1.1.5 速度計補正配列化
 //MC53_ME38_BVE_VM_V4.1.1.6 速度計補正最適化
 //MC53_ME38_BVE_VM_V4.1.1.7 ブレーキノッチ逆転
+//MC53_ME38_BVE_VM_V4.1.1.8 電圧計バグフィックス
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
