@@ -1,7 +1,7 @@
 //Arduino Micro または Leonard を使用してください
 
-//Adafruit MCP23017 Arduino Library を導入してください
-//Adafruit_MCP4725 Arduino Library を導入してください
+//Adafruit MCP23017 Arduino Library を導入してください。
+//Adafruit_MCP4725 Arduino Library は使用しません
 //導入方法：ライブラリマネージャーから上記を検索してインストールします
 
 
@@ -47,7 +47,8 @@
 //MC53_ME38_BVE_VM_V4.1.1.5 速度計補正配列化
 //MC53_ME38_BVE_VM_V4.1.1.6 速度計補正最適化
 //MC53_ME38_BVE_VM_V4.1.1.7 ブレーキノッチ逆転
-//MC53_ME38_BVE_VM_V4.1.1.8 電圧計バグフィックス
+//MC53_ME38_BVE_VM_V4.1.1.8_simple MCP3008とMCP4725を使用しない定義を追加
+//MC53_ME38_BVE_VM_V4.1.1.9 微修正
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -55,6 +56,8 @@
 #include <Wire.h>
 
 #include <Keyboard.h>
+
+//#define SIMPLE MCP3008およびMCP4725を使用しない定義用
 
 //マスコン入力ピンアサイン
 #define PIN_MC_1 0
@@ -82,15 +85,19 @@
 #define PIN_LIGHT_ON 14
 #define PIN_PANTO 15
 
+#ifndef SIMPLE
 #define SS_Brk 4  //MCP3008_Brk
 #define SS_Mc SS  //MCP23S17_MC
+#endif
 
 //↓デバッグのコメント(//)を解除するとシリアルモニタでデバッグできます
 //#define DEBUG
 
 Adafruit_MCP23X17 mcp;
+#ifndef SIMPLE
 Adafruit_MCP4725 dac;
 Adafruit_MCP4725 dac2;
+#endif
 
 SPISettings settings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
 
@@ -143,10 +150,6 @@ bool Horn_2 = 0;
 bool Horn_2_latch = 0;
 
 //ATS
-bool Ats_Cont = 0;             //警報持続スイッチ
-bool Ats_Cont_latch = 0;       //警報持続スイッチ
-bool Ats_Conf = 0;             //ATS確認ボタン
-bool Ats_Conf_latch = 0;       //ATS確認ボタン
 bool Ats_Rec = 0;              //ATS復帰スイッチ
 bool Ats_Rec_latch = 0;        //ATS復帰スイッチ
 bool Ats_Pos = 0;              //ATS確認位置
@@ -192,6 +195,12 @@ void setup() {
   pinMode(8, OUTPUT);        //BVE_Door
   digitalWrite(8, 0);
 
+#ifdef SIMPLE
+  pinMode(A0, INPUT);
+  pinMode(2, INPUT_PULLUP);
+  pinMode(3, INPUT_PULLUP);
+#endif
+
   pinMode(9, INPUT_PULLUP);   //ATS
   pinMode(10, INPUT_PULLUP);  //予備
   pinMode(11, INPUT_PULLUP);  //予備SW1
@@ -201,8 +210,11 @@ void setup() {
   Serial1.begin(115200);
   Serial.setTimeout(10);
   Serial1.setTimeout(10);
+#ifndef SIMPLE
   dac.begin(0x60);
   dac2.begin(0x61);
+#endif
+
   Keyboard.begin();
 
   if (!mcp.begin_SPI(SS_Mc)) {
@@ -279,8 +291,6 @@ void setup() {
     EEPROM.get(78, Auto_Notch_Adjust);       //自動ノッチ合わせ
     EEPROM.get(80, RealAutoAir);             //実際のエアー圧で自動帯再現
     EEPROM.get(82, AtsContactUse);           //ATS接点情報を他基板へ伝送
-    Ats_Cont = Ats_Cont_latch = Ats_Cont_flip;
-    Ats_Conf = Ats_Conf_latch = Ats_Conf_flip;
   }
 
   //速度計テスト
@@ -439,8 +449,9 @@ void read_IOexp() {
 
 //MCP3008ADコンバータ読取
 uint16_t adcRead(uint8_t ch) {  // 0 .. 7
+#ifndef SIMPLE
   byte channelData = (ch + 8) << 4;
-  // Serial.println(String(channelData,BIN));
+  //  Serial.println(String(channelData, BIN));
   SPI.beginTransaction(settings);
   digitalWrite(SS_Brk, LOW);
   delayMicroseconds(100);
@@ -451,6 +462,16 @@ uint16_t adcRead(uint8_t ch) {  // 0 .. 7
   digitalWrite(SS_Brk, HIGH);
   SPI.endTransaction();
   return ((highByte & 0x03) << 8) + lowByte;
+#else
+  switch (ch) {
+    case 0:
+      return analogRead(A0);
+      break;
+    case 1:
+      return analogRead(A3);
+      break;
+  }
+#endif
 }
 
 //MCP23S17マスコンノッチ状態読込 (MC53抑速ブレーキ対応)
@@ -458,8 +479,8 @@ void read_MC(void) {
   uint8_t mcBit = ioexp_1_AB;      //MCP23S17読込
   static uint8_t mcBit_latch = 0;  //MCP23S17読込格納
   if (mcBit != mcBit_latch) {
-    if (ioexp_1_AB & (1 << PIN_MC_DEC)) {
-      if (~ioexp_1_AB & (1 << PIN_MC_5)) {
+    if (ioexp_1_AB >> PIN_MC_DEC & 1) {
+      if (~ioexp_1_AB >> PIN_MC_5 & 1) {
         if ((notch_mc_num_max == 5) && (notch_mc_num == 4)) {
           notch_mc = 54;
           notch_name = "P4";
@@ -468,7 +489,7 @@ void read_MC(void) {
           notch_name = "P5";
         }
         autoair_dir_mask = false;
-      } else if (~ioexp_1_AB & (1 << PIN_MC_4)) {
+      } else if (~ioexp_1_AB >> PIN_MC_4 & 1) {
         if ((notch_mc_num_max == 4) && (notch_mc_num == 5)) {
           notch_mc = 55;
           notch_name = "P5";
@@ -477,15 +498,15 @@ void read_MC(void) {
           notch_name = "P4";
         }
         autoair_dir_mask = false;
-      } else if (~ioexp_1_AB & (1 << PIN_MC_3)) {
+      } else if (~ioexp_1_AB >> PIN_MC_3 & 1) {
         notch_mc = 53;
         notch_name = "P3";
         autoair_dir_mask = false;
-      } else if (~ioexp_1_AB & (1 << PIN_MC_2)) {
+      } else if (~ioexp_1_AB >> PIN_MC_2 & 1) {
         notch_mc = 52;
         notch_name = "P2";
         autoair_dir_mask = false;
-      } else if (~ioexp_1_AB & (1 << PIN_MC_1)) {
+      } else if (~ioexp_1_AB >> PIN_MC_1 & 1) {
         notch_mc = 51;
         notch_name = "P1";
         autoair_dir_mask = false;
@@ -500,21 +521,23 @@ void read_MC(void) {
         }
       }
     } else {
-      if (~ioexp_1_AB & (1 << PIN_MC_5) && !autoair_dir_mask) {
-        notch_mc_H = 101;
-        notch_name = "H1";
-      } else if (~ioexp_1_AB & (1 << PIN_MC_3) && ioexp_1_AB & (1 << PIN_MC_4) && !autoair_dir_mask) {
-        notch_mc_H = 102;
-        notch_name = "H2";
-      } else if (~ioexp_1_AB & (1 << PIN_MC_2) && ioexp_1_AB & (1 << PIN_MC_4) && !autoair_dir_mask) {
-        notch_mc_H = 103;
-        notch_name = "H3";
-      } else if (~ioexp_1_AB & (1 << PIN_MC_2) && ~ioexp_1_AB & (1 << PIN_MC_4) && !autoair_dir_mask) {
-        notch_mc_H = 104;
-        notch_name = "H4";
-      } else if (~ioexp_1_AB & (1 << PIN_MC_3) && ~ioexp_1_AB & (1 << PIN_MC_4) && !autoair_dir_mask) {
-        notch_mc_H = 105;
-        notch_name = "H5";
+      if (!autoair_dir_mask) {
+        if (~ioexp_1_AB >> PIN_MC_5 & 1) {
+          notch_mc_H = 101;
+          notch_name = "H1";
+        } else if (~ioexp_1_AB >> PIN_MC_3 & 1 && ioexp_1_AB >> PIN_MC_4 & 1) {
+          notch_mc_H = 102;
+          notch_name = "H2";
+        } else if (~ioexp_1_AB >> PIN_MC_2 & 1 && ioexp_1_AB >> PIN_MC_4 & 1) {
+          notch_mc_H = 103;
+          notch_name = "H3";
+        } else if (~ioexp_1_AB >> PIN_MC_2 & 1 && ~ioexp_1_AB >> PIN_MC_4 & 1) {
+          notch_mc_H = 104;
+          notch_name = "H4";
+        } else if (~ioexp_1_AB >> PIN_MC_3 & 1 && ~ioexp_1_AB >> PIN_MC_4 & 1) {
+          notch_mc_H = 105;
+          notch_name = "H5";
+        }
       }
     }
   }
@@ -524,11 +547,11 @@ void read_MC(void) {
 //マスコンレバーサ読取
 void read_Dir(void) {
   if (!autoair_dir_mask) {
-    if (~ioexp_1_AB & (1 << PIN_MC_DIR_F)) {
+    if (~ioexp_1_AB >> PIN_MC_DIR_F & 1) {
       iDir = 1;
       cDir[0] = 'F';
       cDir_N[0] = 'L';
-    } else if (~ioexp_1_AB & (1 << PIN_MC_DIR_B)) {
+    } else if (~ioexp_1_AB >> PIN_MC_DIR_B & 1) {
       iDir = -1;
       cDir[0] = 'B';
       cDir_N[0] = 'R';
@@ -543,10 +566,12 @@ void read_Dir(void) {
 uint16_t read_Break(void) {
   uint16_t adc = adcRead(0);
   static uint16_t adc_latch = 0;
-  if (adc < POT_N) {
-    adc = POT_N;
-  } else if (adc > POT_EB) {
-    adc = POT_EB;
+  if (POT_N < POT_EB) {
+    if (adc < POT_N) {
+      adc = POT_N;
+    } else if (adc > POT_EB) {
+      adc = POT_EB;
+    }
   }
   brk_angl = map(adc, POT_N, POT_EB, 0, brk_full_angl * 100) / 100.0;
 
@@ -816,8 +841,13 @@ void read_Break_Setting(void) {
   static uint8_t setMode_EB = 0;
   String s = "";
   uint16_t value = 0;
+#ifndef SIMPLE
   bool btn_n = (adcRead(5) < 512);
   bool btn_eb = (adcRead(6) < 512);
+#else
+  bool btn_n = !digitalRead(3);
+  bool btn_eb = !digitalRead(2);
+#endif
   if (btn_n) {
     if (setMode_N == 0) {
       adj_N = adcRead(0);
@@ -934,11 +964,14 @@ void read_Ats(void) {
   Ats_Pos_latch = Ats_Pos;
 
   //ATS警報持続
+  bool Ats_Cont = false;  //警報持続スイッチ
+  //ATS警報持続
   if (Ats_Cont_flip) {
-    Ats_Cont = ioexp_1_AB & (1 << PIN_ATS_CONT);
+    Ats_Cont = ioexp_1_AB >> PIN_ATS_CONT & 1;
   } else {
-    Ats_Cont = ~ioexp_1_AB & (1 << PIN_ATS_CONT);
+    Ats_Cont = ~ioexp_1_AB >> PIN_ATS_CONT & 1;
   }
+  static bool Ats_Cont_latch = Ats_Cont;  //警報持続スイッチ
   if (Ats_Cont != Ats_Cont_latch) {
     if (Ats_Cont) {
       if (modeBVE) {
@@ -960,12 +993,13 @@ void read_Ats(void) {
   Ats_Cont_latch = Ats_Cont;
 
   //ATS確認
+  bool Ats_Conf = false;  //ATS確認ボタン
   if (Ats_Conf_flip) {
-    Ats_Conf = ioexp_1_AB & (1 << PIN_ATS_CONF);
+    Ats_Conf = ioexp_1_AB >> PIN_ATS_CONF & 1;
   } else {
-    Ats_Conf = ~ioexp_1_AB & (1 << PIN_ATS_CONF);
+    Ats_Conf = ~ioexp_1_AB >> PIN_ATS_CONF & 1;
   }
-
+  static bool Ats_Conf_latch = Ats_Conf;  //ATS確認ボタン
   if (Ats_Conf != Ats_Conf_latch) {
     if (Ats_Conf) {
       if (modeBVE) {
@@ -1006,8 +1040,8 @@ void read_Ats(void) {
 }
 
 void read_Panto(void) {
-  bool Panto = ~ioexp_1_AB & (1 << PIN_PANTO);
-  static bool Panto_latch = 0;
+  bool Panto = ~ioexp_1_AB >> PIN_PANTO & 1;
+  static bool Panto_latch = false;
   if (Panto != Panto_latch) {
     if (Panto) {
       if (modeBVE) {
@@ -1077,7 +1111,11 @@ void disp_SpeedMeter(uint16_t spd) {
       break;
     }
   }
+#ifndef SIMPLE
   dac.setVoltage(volt, false);
+#else
+  analogWrite(10, volt >> 4);
+#endif
 }
 
 void BP(uint8_t *angl) {
@@ -1193,21 +1231,38 @@ void AutoNotch(String *str) {
 }
 
 void disp_CurrentMeter(int16_t current) {
+  //回生モードでないとき、負電流は0
   if (!curr_kaisei && (current < 0)) {
     current = 0;
   }
+  //電圧計モードのとき計算後2000Vを超えた時は2000Vに固定
   if (curr_mode) {
     uint16_t v = 1500 - (current * (vehicle_res / 1000.0));
     if (v > 2000) {
       v = 2000;
     }
+    //出力
+#ifndef SIMPLE
     dac2.setVoltage(map(v, 0, 2000, 0, 4095), false);
+#else
+    //analogWrite(11, map(v, 0, 2000, 0, 4095) / 4);
+    analogWrite(11, map(v, 0, 2000, 0, 4095) >> 4);
+#endif
+    //電流計モードの時
   } else {
+    //電流計は正のみ(現状)
     int curr = abs(current);
+    //電流が電流上限を超えた時は電流上限に抑える
     if (curr > curr_limit) {
       curr = curr_limit;
     }
+    //出力
+#ifndef SIMPLE
     dac2.setVoltage(map(curr, 0, curr_limit, 0, 4095), false);
+#else
+    //analogWrite(11, map(curr, 0, curr_limit, 0, 4095) / 4));
+    analogWrite(11, map(curr, 0, curr_limit, 0, 4095) >> 4));
+#endif
   }
 }
 
@@ -1343,11 +1398,9 @@ void set_Settings(uint8_t device, int16_t num) {
       break;
     case 74:  //警報持続ボタン反転 0:B接点 1以上:A接点
       s = rw_eeprom(device, &num, (uint16_t)&Ats_Cont_flip, true, num < 0 || num > 1);
-      Ats_Cont_latch = Ats_Cont = Ats_Cont_flip;
       break;
     case 76:  //ATS確認ボタン反転 0:B接点 1以上:A接点
       s = rw_eeprom(device, &num, (uint16_t)&Ats_Conf_flip, true, num < 0 || num > 1);
-      Ats_Conf_latch = Ats_Conf = Ats_Conf_flip;
       break;
     case 78:  //自動ノッチ合わせ
       s = rw_eeprom(device, &num, (uint16_t)&Auto_Notch_Adjust, true, num < 0 || num > 1);
