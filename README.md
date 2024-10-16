@@ -20,7 +20,7 @@
 4. 添付の[回路図通り](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.1.9.pdf)に[製作](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.1.9.png)します。
    [回路図](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.1.9.pdf)と[実態配線図](ME38_MC53_Pedal_SWBox_DG_VM_V4.1.1.9.png)がありますので参考にしてください。
    コネクタ類も参考です。直接配線しても問題はありません。
-5. AE-MCP4725の基板裏面はSDAとSCLのプルアップのみハンダでジャンパー接続します。A0はピンに配線しています。
+5. AE-MCP4725の基板裏面はSDAとSCLのプルアップのみハンダでジャンパー接続します。A0はピンに配線しています。(ジャンパーを忘れると正常動作しません)
 6. Arduino IDEには、Adafruit MCP23017 Arduino Library と Adafruit_MCP4725 Arduino Library を導入してください。
    ![実態配線図](https://github.com/GraphTechKEN/MC53_ME38_BVE_VM/blob/main/ME38_MC53_Pedal_SWBox_DG_VM_V4.1.1.9.png)
 
