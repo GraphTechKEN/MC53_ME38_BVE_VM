@@ -49,6 +49,17 @@
 //MC53_ME38_BVE_VM_V4.1.1.7 ブレーキノッチ逆転
 //MC53_ME38_BVE_VM_V4.1.1.8_simple MCP3008とMCP4725を使用しない定義を追加
 //MC53_ME38_BVE_VM_V4.1.1.9 微修正
+//MC53_ME38_BVE_VM_V4.1.2.1 警報持続スイッチ反転を他スイッチに拡張(ATS確認を除く)、抑速-非常接点切替対応、ME38自動帯非常抜取対応
+
+/*input_flip
+  1bit:警報持続
+  (2bit:ATS確認ボタン)
+  (3bit:ATS復帰ボタン未実装) 
+  4bit:EB
+  5bit:警笛1
+  6bit:警笛2
+  7bit:抑速 0:抑速 1:非常
+  */
 
 #include <Adafruit_MCP23X17.h>
 #include <Adafruit_MCP4725.h>
@@ -144,19 +155,13 @@ int8_t iDir = 0;
 int8_t iDir_latch = 0;
 char cDir[2] = "  ";
 char cDir_N[2] = "  ";
-bool Horn_1 = 0;
-bool Horn_1_latch = 0;
-bool Horn_2 = 0;
-bool Horn_2_latch = 0;
 
 //ATS
-bool Ats_Rec = 0;              //ATS復帰スイッチ
-bool Ats_Rec_latch = 0;        //ATS復帰スイッチ
 bool Ats_Pos = 0;              //ATS確認位置
 bool Ats_Pos_latch = 0;        //ATS確認位置
 uint8_t Ats_In_Count_On = 0;   //ATS確認位置チャタリング防止用
 uint8_t Ats_In_Count_Off = 0;  //ATS確認位置チャタリング防止用
-uint16_t Ats_Cont_flip = 0;    //074 警報持続ボタン反転 0:B接点 1以上:A接点
+uint16_t input_flip = 0;       //074 ボタン反転(旧警報持続ボタン反転 0:B接点 1以上:A接点)0:B接点 1以上:A接点
 uint16_t Ats_Conf_flip = 0;    //076 ATS確認ボタン反転 0:B接点 1以上:A接点
 uint16_t AtsContactUse = 0;    //082 ATS接点判定使用
 //ATS
@@ -187,6 +192,7 @@ uint16_t RealAutoAir = 1;        //080 実際のエアー圧で自動帯再現
 uint16_t notch_mc_num_max = 5;   //070マスコンノッチ最大数
 uint16_t notch_mc_num = 5;       //072マスコンノッチ数(車両)
 uint16_t Auto_Notch_Adjust = 1;  //078自動ノッチ合わせ機構
+
 
 void setup() {
   pinMode(SS_Brk, OUTPUT);   //MCP3008
@@ -254,7 +260,7 @@ void setup() {
     EEPROM.put(68, autoair_use);             //自動帯使用可否
     EEPROM.put(70, notch_mc_num_max);        //マスコンノッチ最大数
     EEPROM.put(72, notch_mc_num);            //マスコンノッチ数(車両)
-    EEPROM.put(74, Ats_Cont_flip);           //警報持続ボタン反転 0:B接点 1以上:A接点
+    EEPROM.put(74, input_flip);              //入力反転(旧警報持続ボタン反転) 0:B接点 1以上:A接点
     EEPROM.put(76, Ats_Conf_flip);           //ATS確認ボタン反転 0:B接点 1以上:A接点
     EEPROM.put(78, Auto_Notch_Adjust);       //自動ノッチ合わせ
     EEPROM.put(80, RealAutoAir);             //実際のエアー圧で自動帯再現
@@ -286,12 +292,14 @@ void setup() {
     EEPROM.get(68, autoair_use);             //自動帯使用可否
     EEPROM.get(70, notch_mc_num_max);        //マスコンノッチ最大数
     EEPROM.get(72, notch_mc_num);            //マスコンノッチ数(車両)
-    EEPROM.get(74, Ats_Cont_flip);           //警報持続ボタン反転 0:B接点 1以上:A接点
+    EEPROM.get(74, input_flip);              //入力反転(旧警報持続ボタン反転) 0:B接点 1以上:A接点
     EEPROM.get(76, Ats_Conf_flip);           //ATS確認ボタン反転 0:B接点 1以上:A接点
     EEPROM.get(78, Auto_Notch_Adjust);       //自動ノッチ合わせ
     EEPROM.get(80, RealAutoAir);             //実際のエアー圧で自動帯再現
     EEPROM.get(82, AtsContactUse);           //ATS接点情報を他基板へ伝送
   }
+
+
 
   //速度計テスト
   disp_SpeedMeter(spd_limit * 10);
@@ -521,22 +529,33 @@ void read_MC(void) {
         }
       }
     } else {
-      if (!autoair_dir_mask) {
-        if (~ioexp_1_AB >> PIN_MC_5 & 1) {
-          notch_mc_H = 101;
-          notch_name = "H1";
-        } else if (~ioexp_1_AB >> PIN_MC_3 & 1 && ioexp_1_AB >> PIN_MC_4 & 1) {
-          notch_mc_H = 102;
-          notch_name = "H2";
-        } else if (~ioexp_1_AB >> PIN_MC_2 & 1 && ioexp_1_AB >> PIN_MC_4 & 1) {
-          notch_mc_H = 103;
-          notch_name = "H3";
-        } else if (~ioexp_1_AB >> PIN_MC_2 & 1 && ~ioexp_1_AB >> PIN_MC_4 & 1) {
-          notch_mc_H = 104;
-          notch_name = "H4";
-        } else if (~ioexp_1_AB >> PIN_MC_3 & 1 && ~ioexp_1_AB >> PIN_MC_4 & 1) {
-          notch_mc_H = 105;
-          notch_name = "H5";
+      if (input_flip >> 6 & 1) {  //非常有効時
+
+        //マスコンデッドマン仮実装
+        notch_mc = 50;
+        notch_mc_H = 100;
+        notch_name = "N ";
+        notch_brk = notch_brk_num + 1;
+        notch_brk_name = "EB";
+        autoair_dir_mask = false;
+      } else {  //抑速有効時
+        if (!autoair_dir_mask) {
+          if (~ioexp_1_AB >> PIN_MC_5 & 1) {
+            notch_mc_H = 101;
+            notch_name = "H1";
+          } else if (~ioexp_1_AB >> PIN_MC_3 & 1 && ioexp_1_AB >> PIN_MC_4 & 1) {
+            notch_mc_H = 102;
+            notch_name = "H2";
+          } else if (~ioexp_1_AB >> PIN_MC_2 & 1 && ioexp_1_AB >> PIN_MC_4 & 1) {
+            notch_mc_H = 103;
+            notch_name = "H3";
+          } else if (~ioexp_1_AB >> PIN_MC_2 & 1 && ~ioexp_1_AB >> PIN_MC_4 & 1) {
+            notch_mc_H = 104;
+            notch_name = "H4";
+          } else if (~ioexp_1_AB >> PIN_MC_3 & 1 && ~ioexp_1_AB >> PIN_MC_4 & 1) {
+            notch_mc_H = 105;
+            notch_name = "H5";
+          }
         }
       }
     }
@@ -903,7 +922,11 @@ void read_Break_Setting(void) {
 }
 
 void read_Horn(void) {
-  Horn_1 = ~ioexp_1_AB & (1 << PIN_HORN_1);
+  bool Horn_1 = ~ioexp_1_AB >> PIN_HORN_1 & 1;  //警笛1
+  if (input_flip >> 4 & 1) {
+    Horn_1 = !Horn_1;
+  }
+  static bool Horn_1_latch = Horn_1;
   if (Horn_1 != Horn_1_latch) {
     if (Horn_1) {
       if (modeBVE) {
@@ -917,7 +940,11 @@ void read_Horn(void) {
   }
   Horn_1_latch = Horn_1;
 
-  Horn_2 = ~ioexp_1_AB & (1 << PIN_HORN_2);
+  bool Horn_2 = ~ioexp_1_AB >> PIN_HORN_2 & 1;  //警笛2
+  if (input_flip >> 5 & 1) {
+    Horn_2 = !Horn_2;
+  }
+  static bool Horn_2_latch = Horn_2;
   if (Horn_2 != Horn_2_latch) {
     if (Horn_2) {
       if (modeBVE) {
@@ -928,8 +955,8 @@ void read_Horn(void) {
         Keyboard.release(0xDF);
       }
     }
+    Horn_2_latch = Horn_2;
   }
-  Horn_2_latch = Horn_2;
 }
 
 void read_Ats(void) {
@@ -964,12 +991,10 @@ void read_Ats(void) {
   Ats_Pos_latch = Ats_Pos;
 
   //ATS警報持続
-  bool Ats_Cont = false;  //警報持続スイッチ
+  bool Ats_Cont = ~ioexp_1_AB >> PIN_ATS_CONT & 1;  //警報持続スイッチ
   //ATS警報持続
-  if (Ats_Cont_flip) {
-    Ats_Cont = ioexp_1_AB >> PIN_ATS_CONT & 1;
-  } else {
-    Ats_Cont = ~ioexp_1_AB >> PIN_ATS_CONT & 1;
+  if (input_flip & 1) {
+    Ats_Cont = !Ats_Cont;
   }
   static bool Ats_Cont_latch = Ats_Cont;  //警報持続スイッチ
   if (Ats_Cont != Ats_Cont_latch) {
@@ -989,15 +1014,13 @@ void read_Ats(void) {
         Keyboard.release(0xD1);
       }
     }
+    Ats_Cont_latch = Ats_Cont;
   }
-  Ats_Cont_latch = Ats_Cont;
 
   //ATS確認
-  bool Ats_Conf = false;  //ATS確認ボタン
+  bool Ats_Conf = ~ioexp_1_AB >> PIN_ATS_CONF & 1;  //ATS確認ボタン
   if (Ats_Conf_flip) {
-    Ats_Conf = ioexp_1_AB >> PIN_ATS_CONF & 1;
-  } else {
-    Ats_Conf = ~ioexp_1_AB >> PIN_ATS_CONF & 1;
+    Ats_Conf = !Ats_Conf;
   }
   static bool Ats_Conf_latch = Ats_Conf;  //ATS確認ボタン
   if (Ats_Conf != Ats_Conf_latch) {
@@ -1020,11 +1043,15 @@ void read_Ats(void) {
         Keyboard.release(0x20);
       }
     }
+    Ats_Conf_latch = Ats_Conf;
   }
-  Ats_Conf_latch = Ats_Conf;
 
   //ATS復帰
-  Ats_Rec = !digitalRead(9);
+  bool Ats_Rec = digitalRead(9);
+  if (input_flip >> 2 & 1) {
+    Ats_Rec = !Ats_Rec;
+  }
+  static bool Ats_Rec_latch = Ats_Rec;
   if (Ats_Rec != Ats_Rec_latch) {
     if (Ats_Rec) {
       if (modeBVE) {
@@ -1035,8 +1062,8 @@ void read_Ats(void) {
         Keyboard.release(0xD2);
       }
     }
+    Ats_Rec_latch = Ats_Rec;
   }
-  Ats_Rec_latch = Ats_Rec;
 }
 
 void read_Panto(void) {
@@ -1053,8 +1080,8 @@ void read_Panto(void) {
         Keyboard.releaseAll();
       }
     }
+    Panto_latch = Panto;
   }
-  Panto_latch = Panto;
 }
 
 void read_Light_Def(void) {
@@ -1082,7 +1109,10 @@ void read_Light(void) {
 }
 
 void read_EB(void) {
-  bool EB_SW = !digitalRead(5);
+  bool EB_SW = digitalRead(5);
+  if (input_flip >> 3 & 1) {
+    EB_SW = !EB_SW;
+  }
   static bool EB_SW_latch = 0;
   if (EB_SW != EB_SW_latch) {
     if (EB_SW) {
@@ -1094,8 +1124,8 @@ void read_EB(void) {
         Keyboard.release(KEY_DELETE);  //"Delete"
       }
     }
+    EB_SW_latch = EB_SW;
   }
-  EB_SW_latch = EB_SW;
 }
 
 void disp_SpeedMeter(uint16_t spd) {
@@ -1119,7 +1149,7 @@ void disp_SpeedMeter(uint16_t spd) {
 }
 
 void BP(uint8_t *angl) {
-
+  static bool EB_latch = false;
   if (!RealAutoAir) {
     //BPの増減圧インターバルを設定
     if (*angl < brk_keep_angl) {
@@ -1132,6 +1162,7 @@ void BP(uint8_t *angl) {
 
     //直通帯(運転位置)でBP圧を加圧
     if (*angl < brk_sap_angl) {
+      EB_latch = false;
       if ((millis() - bp_millis) > bp_span && brk_bp_press < 490) {
         brk_bp_press++;
         bp_millis = millis();
@@ -1140,23 +1171,38 @@ void BP(uint8_t *angl) {
     } else if (*angl < brk_keep_angl) {
 
       //常用位置でBP圧を減圧
-    } else {
+    } else if (*angl < brk_eb_angl) {
       if ((millis() - bp_millis) > bp_span && brk_bp_press > 0) {
         brk_bp_press--;
         bp_millis = millis();
       }
+    } else if (*angl >= brk_eb_angl) {
+      EB_latch = true;
+      brk_bp_press = 0;
     }
 
     //自動帯でのBC圧をBP圧より生成
     BC_press = (490 - brk_bp_press) * 2.5;
+    //非常吐出なく、自動帯常用でBC圧力が440kPa以上のとき440kPaとする
     if (BC_press > 440) {
-      BC_press = 440;
+      if (*angl < brk_eb_angl && !EB_latch) {
+        BC_press = 440;
+      }
+    }
+    //急動部動作時
+    if (BC_press > 490) {
+      if (*angl >= brk_eb_angl || EB_latch) {
+        BC_press = 490;
+      }
     }
   }
 
   //BC圧からブレーキノッチに変換
-  autoair_notch_brk = map(BC_press, 0, 400, 0, notch_brk_num);
-
+  if (EB_latch) {
+    autoair_notch_brk = notch_brk_num + 1;
+  } else {
+    autoair_notch_brk = map(BC_press, 0, 440, 0, notch_brk_num);
+  }
   //自動帯圧力優先シーケンス
   //N位置
   if (*angl <= brk_sap_min_angl) {
@@ -1168,13 +1214,11 @@ void BP(uint8_t *angl) {
   } else if (*angl < brk_sap_angl) {
     //自動ブレーキ
     if (notch_brk < autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
-
       notch_brk = autoair_notch_brk;
     }
 
     //自動帯
-  } else if (*angl < brk_eb_angl) {  //自動ブレーキ
-
+  } else if (*angl < brk_eb_angl) {       //自動ブレーキ
     if (notch_brk < autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
       notch_brk = autoair_notch_brk;
     }
@@ -1397,10 +1441,10 @@ void set_Settings(uint8_t device, int16_t num) {
       s = rw_eeprom(device, &num, &notch_mc_num, true, num < 0);
       break;
     case 74:  //警報持続ボタン反転 0:B接点 1以上:A接点
-      s = rw_eeprom(device, &num, (uint16_t)&Ats_Cont_flip, true, num < 0 || num > 1);
+      s = rw_eeprom(device, &num, &input_flip, true, false);
       break;
     case 76:  //ATS確認ボタン反転 0:B接点 1以上:A接点
-      s = rw_eeprom(device, &num, (uint16_t)&Ats_Conf_flip, true, num < 0 || num > 1);
+      s = rw_eeprom(device, &num, &Ats_Conf_flip, true, num < 0 || num > 1);
       break;
     case 78:  //自動ノッチ合わせ
       s = rw_eeprom(device, &num, (uint16_t)&Auto_Notch_Adjust, true, num < 0 || num > 1);
