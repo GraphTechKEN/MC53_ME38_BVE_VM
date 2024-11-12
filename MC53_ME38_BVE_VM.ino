@@ -1441,7 +1441,7 @@ void set_Settings(uint8_t device, int16_t num) {
       s = rw_eeprom(device, &num, &notch_mc_num, true, num < 0);
       break;
     case 74:  //警報持続ボタン反転 0:B接点 1以上:A接点
-      s = rw_eeprom(device, &num, &input_flip, true, false);
+      s = rw_eeprom(device, &num, &input_flip, true, num < 0 || num > 65535);
       break;
     case 76:  //ATS確認ボタン反転 0:B接点 1以上:A接点
       s = rw_eeprom(device, &num, &Ats_Conf_flip, true, num < 0 || num > 1);
