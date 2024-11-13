@@ -192,6 +192,7 @@ uint16_t RealAutoAir = 1;        //080 実際のエアー圧で自動帯再現
 uint16_t notch_mc_num_max = 5;   //070マスコンノッチ最大数
 uint16_t notch_mc_num = 5;       //072マスコンノッチ数(車両)
 uint16_t Auto_Notch_Adjust = 1;  //078自動ノッチ合わせ機構
+bool EB_latch = false;
 
 
 void setup() {
@@ -618,6 +619,7 @@ uint16_t read_Break(void) {
       String s = String(temp_notch_brk);
       notch_brk_name = "B" + s;
       autoair_dir_mask = false;
+      EB_latch = false;
 
       //常用最大位置～直通帯範囲まで
     } else if (brk_angl < brk_sap_angl) {
@@ -688,6 +690,7 @@ uint16_t read_Break(void) {
       notch_brk = notch_brk_num + 1;
       notch_brk_name = "EB";
       autoair_dir_mask = false;
+      EB_latch = true;
     }
     brk_angl_latch = brk_angl;
   }
@@ -1149,7 +1152,7 @@ void disp_SpeedMeter(uint16_t spd) {
 }
 
 void BP(uint8_t *angl) {
-  static bool EB_latch = false;
+
   if (!RealAutoAir) {
     //BPの増減圧インターバルを設定
     if (*angl < brk_keep_angl) {
@@ -1162,7 +1165,6 @@ void BP(uint8_t *angl) {
 
     //直通帯(運転位置)でBP圧を加圧
     if (*angl < brk_sap_angl) {
-      EB_latch = false;
       if ((millis() - bp_millis) > bp_span && brk_bp_press < 490) {
         brk_bp_press++;
         bp_millis = millis();
@@ -1177,7 +1179,6 @@ void BP(uint8_t *angl) {
         bp_millis = millis();
       }
     } else if (*angl >= brk_eb_angl) {
-      EB_latch = true;
       brk_bp_press = 0;
     }
 
