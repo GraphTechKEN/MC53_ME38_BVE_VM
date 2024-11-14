@@ -50,6 +50,8 @@
 //MC53_ME38_BVE_VM_V4.1.1.8_simple MCP3008とMCP4725を使用しない定義を追加
 //MC53_ME38_BVE_VM_V4.1.1.9 微修正
 //MC53_ME38_BVE_VM_V4.1.2.1 警報持続スイッチ反転を他スイッチに拡張(ATS確認を除く)、抑速-非常接点切替対応、ME38自動帯非常抜取対応
+//MC53_ME38_BVE_VM_V4.1.2.2 実際のエアー圧使用時にもME38非常抜取対応
+//MC53_ME38_BVE_VM_V4.1.2.3 非常ラッチ(EB_latch)解除位置が常用最大手前だったものを修正
 
 /*input_flip
   1bit:警報持続
@@ -115,13 +117,10 @@ SPISettings settings = SPISettings(1000000, MSBFIRST, SPI_MODE0);
 uint16_t ioexp_1_AB = 0;
 uint16_t bve_speed = 0;
 uint8_t notch_mc = 0;              //マスコンノッチ
-uint8_t notch_mc_latch = 0;        //マスコンノッチ格納
 uint8_t notch_mc_H = 0;            //抑速ノッチ
-uint8_t notch_mc_H_latch = 0;      //抑速ノッチ格納
-uint8_t mc_DEC_latch = 0;          //低速制御
 String notch_name = "";            //マスコンノッチ名称
 uint8_t notch_brk = 0;             //ブレーキノッチ
-uint8_t notch_brk_latch = 0;       //ブレーキノッチ格納
+uint8_t notch_brk_latch = 0;       //ブレーキノッチ格納 ※自動ノッチ合わせ機構でも使用するためグローバル変数
 String notch_brk_name = "";        //ブレーキノッチ名称
 String notch_brk_name_latch = "";  //ブレーキノッチ名称格納
 //以下ブレーキ設定値
@@ -136,7 +135,6 @@ uint16_t brk_keep_angl = 130;       //060 重なり全開位置
 uint16_t brk_keep_full_angl = 135;  //062 重なり開始位置
 uint16_t brk_bp_press = 490;        //BP管圧力
 uint8_t brk_angl = 0;               //ブレーキ弁角度
-uint8_t brk_angl_latch = 0;         //ブレーキ弁角度格納
 //以上ブレーキ設定値
 
 //以下速度計補正値
@@ -144,15 +142,14 @@ uint16_t spd_adj[18] = { 0, 150, 400, 680, 1010, 1330, 1650, 2000, 2340, 2680, 3
 uint16_t spd_limit = 120;  //044 速度上限
 //以上速度計補正値
 
-
 uint16_t curr_kaisei = true;  //046 回生モード true:有効　false:無効
 uint16_t curr_mode = true;    //048 計器モード true:電圧計 false:電流計
 uint16_t curr_limit = 750;    //050 電流上限
 uint16_t vehicle_res = 500;   //052 列車抵抗
 uint16_t chat_filter = 0;     //054 チャタリングフィルタ[°]
 
-int8_t iDir = 0;
-int8_t iDir_latch = 0;
+int8_t iDir = 0;        //レバーサ
+int8_t iDir_latch = 0;  //レバーサ格納 ※自動ノッチ合わせ機構でも使用するためグローバル変数
 char cDir[2] = "  ";
 char cDir_N[2] = "  ";
 
@@ -597,11 +594,33 @@ uint16_t read_Break(void) {
 
   if (mode_POT && !modeADJ) {
     Serial.print(" Pot1: ");
-    Serial.print(10000 + adc);
+    if (adc < 10000) {
+      Serial.print('0');
+    }
+    if (adc < 1000) {
+      Serial.print('0');
+    }
+    if (adc < 100) {
+      Serial.print('0');
+    }
+    if (adc < 10) {
+      Serial.print('0');
+    }
+    Serial.print(adc);
     Serial.print(" Deg: ");
-    Serial.print(1000 + brk_angl);
+    if (brk_angl < 1000) {
+      Serial.print('0');
+    }
+    if (brk_angl < 100) {
+      Serial.print('0');
+    }
+    if (brk_angl < 10) {
+      Serial.print('0');
+    }
+    Serial.print(brk_angl);
   }
 
+  static uint8_t brk_angl_latch = brk_angl;
   if (abs(brk_angl - brk_angl_latch) >= chat_filter) {
     //N位置
     if (brk_angl <= brk_sap_min_angl) {
@@ -610,22 +629,21 @@ uint16_t read_Break(void) {
       notch_brk_name = "N ";
       autoair_dir_mask = false;
 
-      //直通帯位置
+      //直通帯位置(※常用最大位置まで)
     } else if (brk_angl < brk_sap_max_angl) {
       uint16_t temp_notch_brk = round((float)(brk_angl - brk_sap_min_angl) / (float)(brk_sap_max_angl - brk_sap_min_angl) * (notch_brk_num - 1) + 0.5);
-      //notch_brk = notch_brk_num + 1 - temp_notch_brk;
       notch_brk = temp_notch_brk;
 
       String s = String(temp_notch_brk);
       notch_brk_name = "B" + s;
       autoair_dir_mask = false;
-      EB_latch = false;
 
       //常用最大位置～直通帯範囲まで
     } else if (brk_angl < brk_sap_angl) {
       notch_brk = notch_brk_num;
       notch_brk_name = "B" + String(notch_brk_num);
       autoair_dir_mask = false;
+      EB_latch = false;
 
       //自動帯
     } else if (brk_angl < brk_keep_angl) {
@@ -723,6 +741,7 @@ uint16_t read_Break(void) {
 //キーボード(HID)出力
 void keyboard_control(void) {
   //マスコンノッチが前回と異なるとき
+  static uint8_t notch_mc_latch = notch_mc;
   if (notch_mc != notch_mc_latch) {
     if (modeBVE) {
       uint8_t d = abs(notch_mc - notch_mc_latch);
@@ -761,9 +780,11 @@ void keyboard_control(void) {
         }
       }
     }
+    notch_mc_latch = notch_mc;
   }
 
   //抑速ノッチが前回と異なるとき
+  static uint8_t notch_mc_H_latch = notch_mc_H;
   if (notch_mc_H != notch_mc_H_latch) {
     if (modeBVE) {
       uint8_t d = abs(notch_mc_H - notch_mc_H_latch);
@@ -783,15 +804,19 @@ void keyboard_control(void) {
     if (modeN) {
       //if (notch_brk == notch_brk_num + 1) {
       if (notch_brk == 0) {
-        if (ioexp_1_AB & (1 << PIN_MC_DEC) != mc_DEC_latch) {
-          if (~ioexp_1_AB & (1 << PIN_MC_DEC)) {
+        bool mc_DEC = ioexp_1_AB >> PIN_MC_DEC & 1;
+        static bool mc_DEC_latch = mc_DEC;
+        if (mc_DEC != mc_DEC_latch) {
+          if (!mc_DEC) {
             Serial.println("Co");
           } else {
             Serial.println("N ");
           }
+          mc_DEC_latch = mc_DEC;
         }
       }
     }
+    notch_mc_H_latch = notch_mc_H;
   }
   //ブレーキノッチ(角度)が前回と異なるとき
   if (notch_brk != notch_brk_latch || notch_brk_name != notch_brk_name_latch) {
@@ -845,8 +870,6 @@ void keyboard_control(void) {
       }
     }
   }
-  notch_mc_latch = notch_mc;
-  notch_mc_H_latch = notch_mc_H;
   notch_brk_latch = notch_brk;
   notch_brk_name_latch = notch_brk_name;
   autoair_notch_brk_latch = autoair_notch_brk;
