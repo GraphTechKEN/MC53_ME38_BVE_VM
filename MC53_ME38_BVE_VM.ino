@@ -52,6 +52,7 @@
 //MC53_ME38_BVE_VM_V4.1.2.1 警報持続スイッチ反転を他スイッチに拡張(ATS確認を除く)、抑速-非常接点切替対応、ME38自動帯非常抜取対応
 //MC53_ME38_BVE_VM_V4.1.2.2 実際のエアー圧使用時にもME38非常抜取対応
 //MC53_ME38_BVE_VM_V4.1.2.3 非常ラッチ(EB_latch)解除位置が常用最大手前だったものを修正
+//MC53_ME38_BVE_VM_V4.1.2.4 EBスイッチとATS復帰が反転していたので修正
 
 /*input_flip
   1bit:警報持続
@@ -1073,7 +1074,7 @@ void read_Ats(void) {
   }
 
   //ATS復帰
-  bool Ats_Rec = digitalRead(9);
+  bool Ats_Rec = !digitalRead(9);
   if (input_flip >> 2 & 1) {
     Ats_Rec = !Ats_Rec;
   }
@@ -1135,7 +1136,7 @@ void read_Light(void) {
 }
 
 void read_EB(void) {
-  bool EB_SW = digitalRead(5);
+  bool EB_SW = !digitalRead(5);
   if (input_flip >> 3 & 1) {
     EB_SW = !EB_SW;
   }
