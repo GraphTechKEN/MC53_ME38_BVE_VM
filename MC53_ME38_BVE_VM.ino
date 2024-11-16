@@ -53,6 +53,7 @@
 //MC53_ME38_BVE_VM_V4.1.2.2 実際のエアー圧使用時にもME38非常抜取対応
 //MC53_ME38_BVE_VM_V4.1.2.3 非常ラッチ(EB_latch)解除位置が常用最大手前だったものを修正
 //MC53_ME38_BVE_VM_V4.1.2.4 EBスイッチとATS復帰が反転していたので修正
+//MC53_ME38_BVE_VM_V4.1.2.5 POT_NとPOT_EBの上限修正
 
 /*input_flip
   1bit:警報持続
@@ -582,8 +583,9 @@ void read_Dir(void) {
 
 //ブレーキ角度読取
 uint16_t read_Break(void) {
-  uint16_t adc = adcRead(0);
+  uint16_t adc_raw = adcRead(0);
   static uint16_t adc_latch = 0;
+  uint16_t adc = adc_raw;
   if (POT_N < POT_EB) {
     if (adc < POT_N) {
       adc = POT_N;
@@ -595,19 +597,19 @@ uint16_t read_Break(void) {
 
   if (mode_POT && !modeADJ) {
     Serial.print(" Pot1: ");
-    if (adc < 10000) {
+    if (adc_raw < 10000) {
       Serial.print('0');
     }
-    if (adc < 1000) {
+    if (adc_raw < 1000) {
       Serial.print('0');
     }
-    if (adc < 100) {
+    if (adc_raw < 100) {
       Serial.print('0');
     }
-    if (adc < 10) {
+    if (adc_raw < 10) {
       Serial.print('0');
     }
-    Serial.print(adc);
+    Serial.print(adc_raw);
     Serial.print(" Deg: ");
     if (brk_angl < 1000) {
       Serial.print('0');
