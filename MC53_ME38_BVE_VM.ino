@@ -56,6 +56,7 @@
 //MC53_ME38_BVE_VM_V4.1.2.5 POT_NとPOT_EBの上限修正
 //MC53_ME38_BVE_VM_V4.2.0.1 下位に自動帯情報を伝達、抑速ノッチを廃止(マスコンノッチに統合)
 //MC53_ME38_BVE_VM_V4.2.0.2 ツリアイ管(ER)を追加
+//MC53_ME38_BVE_VM_V4.2.0.3 圧力計の針の動きをソフトにする
 
 /*input_flip
   1bit:警報持続
@@ -180,7 +181,7 @@ bool modeN = false;
 bool modeADJ = false;
 
 //自動ブレーキ帯
-unsigned long bp_millis = 0;
+
 uint8_t bp_span = 20;
 uint8_t autoair_notch_brk = 0;
 uint8_t autoair_notch_brk_latch = 0;
@@ -190,6 +191,7 @@ uint16_t autoair_use = true;     //068自動帯使用可否
 bool autoair_dir_mask = false;   //自動帯使用時方向切替をマスク
 uint16_t BC_press = 0;           //自動帯他基板より入力された値を格納
 uint16_t bve_BC_press = 0;       //USBより入力されたBC値を格納
+uint16_t bve_SAP_press = 0;      //USBより入力されたSAP値を格納
 uint16_t RealAutoAir = 1;        //080 実際のエアー圧で自動帯再現
 uint16_t notch_mc_num_max = 5;   //070マスコンノッチ最大数
 uint16_t notch_mc_num = 5;       //072マスコンノッチ数(車両)
@@ -405,6 +407,7 @@ void loop() {
         //BC抽出
         if (strbve.length() >= 67) {
           bve_BC_press = strbve.substring(55, 58).toInt();
+          bve_SAP_press = strbve.substring(63, 66).toInt();
         }
       }
     }
@@ -1189,6 +1192,8 @@ void BP(uint8_t *angl, String *str) {
       bp_span = bp_span_down;
     }
 
+    static unsigned long bp_millis = 0;
+    static unsigned long er_millis = 0;
     //直通帯(運転位置)でBP,ERを加圧
     if (*angl < brk_sap_angl) {
       if ((millis() - bp_millis) > bp_span) {
@@ -1215,12 +1220,20 @@ void BP(uint8_t *angl, String *str) {
         bp_millis = millis();
       }
     } else if (*angl >= brk_eb_angl) {
-      BP_press = 0;
-      if ((millis() - bp_millis) > bp_span) {
+      if ((millis() - bp_millis) > 20) {
+        if (BP_press > 0) {
+          BP_press -= 10;
+          if (BP_press < 10) {
+            BP_press = 0;
+          }
+        }
+        bp_millis = millis();
+      }
+      if ((millis() - er_millis) > bp_span) {
         if (ER_press > 0) {
           ER_press--;
         }
-        bp_millis = millis();
+        er_millis = millis();
       }
     }
 
@@ -1392,9 +1405,33 @@ void send_Serial1(String *str) {
       setStringAt(59, str, ER_press);
 
       //SAP
-      if (brk_angl > brk_sap_angl) {
-        setStringAt(63, str, 0);
+      static uint16_t sap_press_latch = bve_SAP_press;
+      static unsigned long sap_millis = millis();
+      static bool sap_latch = false;
+      if (brk_angl <= brk_sap_angl) {
+        if (sap_latch && sap_press_latch <= 435) {
+          if ((bve_SAP_press - sap_press_latch) > 50) {
+            sap_press_latch += 5;
+          } else {
+            sap_latch = false;
+          }
+        }
+        if (!sap_latch) {
+          sap_press_latch = bve_SAP_press;
+        }
       }
+      if (brk_angl > brk_sap_angl) {
+        sap_latch = true;
+        if (millis() - sap_millis > 20) {
+          if (sap_press_latch >= 5) {
+            sap_press_latch -= 5;
+          }
+          if (sap_press_latch < 5) {
+            sap_press_latch = 0;
+          }
+        }
+      }
+      setStringAt(63, str, sap_press_latch);
     }
   }
   Serial1.print(*str);
