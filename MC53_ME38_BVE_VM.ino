@@ -55,6 +55,7 @@
 //MC53_ME38_BVE_VM_V4.1.2.4 EBスイッチとATS復帰が反転していたので修正
 //MC53_ME38_BVE_VM_V4.1.2.5 POT_NとPOT_EBの上限修正
 //MC53_ME38_BVE_VM_V4.2.0.1 下位に自動帯情報を伝達、抑速ノッチを廃止(マスコンノッチに統合)
+//MC53_ME38_BVE_VM_V4.2.0.2 ツリアイ管(ER)を追加
 
 /*input_flip
   1bit:警報持続
@@ -135,7 +136,8 @@ uint16_t brk_sap_max_angl = 67;     //056 直通帯最大角度
 uint16_t brk_sap_min_angl = 3;      //058 直通帯最小角度
 uint16_t brk_keep_angl = 130;       //060 重なり全開位置
 uint16_t brk_keep_full_angl = 135;  //062 重なり開始位置
-uint16_t brk_bp_press = 490;        //BP管圧力
+uint16_t BP_press = 490;            //BP管圧力
+uint16_t ER_press = 490;            //ER管圧力
 uint8_t brk_angl = 0;               //ブレーキ弁角度
 //以上ブレーキ設定値
 
@@ -433,11 +435,13 @@ void loop() {
   keyboard_control();    //キーボード(HID)アウトプットルーチン
 
   static uint16_t BC_press_latch = BC_press;
-  static uint16_t brk_bp_press_latch = brk_bp_press;
-  if (BC_press != BC_press_latch || brk_bp_press != brk_bp_press_latch) {
+  static uint16_t BP_press_latch = BP_press;
+  static uint16_t ER_press_latch = ER_press;
+  if (BC_press != BC_press_latch || BP_press != BP_press_latch || ER_press != ER_press_latch) {
     send_Serial1(&strbve);
     BC_press_latch = BC_press;
-    brk_bp_press_latch = brk_bp_press;
+    BP_press_latch = BP_press;
+    ER_press_latch = ER_press;
   }
 
   delay(10);
@@ -737,7 +741,7 @@ uint16_t read_Break(String *str) {
     Serial.print(" Notch: ");
     Serial.print(notch_brk_name);
     Serial.print(" BP: ");
-    Serial.print(brk_bp_press);
+    Serial.print(BP_press);
     Serial.print(" BP_notch: ");
     Serial.println(autoair_notch_brk);
   }
@@ -786,9 +790,9 @@ void keyboard_control(void) {
             }
           }
         }
-      }else{
-      //抑速ノッチ
-      //if (notch_mc <= 0 && notch_mc_latch <= 0 && notch_mc >= -5 && notch_mc_latch >= -5) {
+      } else {
+        //抑速ノッチ
+        //if (notch_mc <= 0 && notch_mc_latch <= 0 && notch_mc >= -5 && notch_mc_latch >= -5) {
         //進段
         for (uint8_t i = 0; i < d; i++) {
           if ((notch_mc - notch_mc_latch) < 0) {
@@ -829,12 +833,14 @@ void keyboard_control(void) {
           //戻し
           //if ((notch_brk - notch_brk_latch) > 0) {
           if ((notch_brk - notch_brk_latch) < 0) {
-            Keyboard.write(',');          }
+            Keyboard.write(',');
+          }
         }
         //ブレーキ
         //if ((notch_brk - notch_brk_latch) < 0) {
         if ((notch_brk - notch_brk_latch) > 0) {
-          Keyboard.write('.');        }
+          Keyboard.write('.');
+        }
       }
       //非常
       if (notch_brk == notch_brk_num + 1) {
@@ -1183,27 +1189,43 @@ void BP(uint8_t *angl, String *str) {
       bp_span = bp_span_down;
     }
 
-    //直通帯(運転位置)でBP圧を加圧
+    //直通帯(運転位置)でBP,ERを加圧
     if (*angl < brk_sap_angl) {
-      if ((millis() - bp_millis) > bp_span && brk_bp_press < 490) {
-        brk_bp_press++;
+      if ((millis() - bp_millis) > bp_span) {
+        if (BP_press < 490) {
+          BP_press++;
+        }
+        if (ER_press < 490) {
+          ER_press++;
+        }
         bp_millis = millis();
       }
-      //重なり位置でBP圧は維持
+      //重なり位置でBP,ERは維持
     } else if (*angl < brk_keep_angl) {
 
       //常用位置でBP圧を減圧
     } else if (*angl < brk_eb_angl) {
-      if ((millis() - bp_millis) > bp_span && brk_bp_press > 0) {
-        brk_bp_press--;
+      if ((millis() - bp_millis) > bp_span) {
+        if (BP_press > 0) {
+          BP_press--;
+        }
+        if (ER_press > 0) {
+          ER_press--;
+        }
         bp_millis = millis();
       }
     } else if (*angl >= brk_eb_angl) {
-      brk_bp_press = 0;
+      BP_press = 0;
+      if ((millis() - bp_millis) > bp_span) {
+        if (ER_press > 0) {
+          ER_press--;
+        }
+        bp_millis = millis();
+      }
     }
 
     //自動帯でのBC圧をBP圧より生成
-    BC_press = (490 - brk_bp_press) * 2.5;
+    BC_press = (490 - BP_press) * 2.5;
     //非常吐出なく、自動帯常用でBC圧力が440kPa以上のとき440kPaとする
     if (BC_press > 440) {
       if (*angl < brk_eb_angl && !EB_latch) {
@@ -1358,29 +1380,20 @@ void send_Serial1(String *str) {
     }
     //自動帯シミュレーション時、BC、BP、SAPを転送する
     if (!RealAutoAir) {
-      //"0000/1/ 00000/100000/0000000000000000000001/NN0B08M780C440F490S440P490/";
+      //"0000/1/ 00000/100000/0000000000000000000001/NN0B08M780C440E490S440P490/";
       //BC
       if (bve_BC_press > BC_press) {
         BC_press = bve_BC_press;
       }
-      if (str->length() >= 67) {
-        str->setCharAt(55, char(BC_press / 100 + 0x30));
-        str->setCharAt(56, char(BC_press / 10 % 10 + 0x30));
-        str->setCharAt(57, char(BC_press % 10 + 0x30));
-      }
+      setStringAt(55, str, BC_press);
       //BP
-      if (str->length() >= 67) {
-        str->setCharAt(67, char(brk_bp_press / 100 + 0x30));
-        str->setCharAt(68, char(brk_bp_press / 10 % 10 + 0x30));
-        str->setCharAt(69, char(brk_bp_press % 10 + 0x30));
-      }
+      setStringAt(67, str, BP_press);
+      //ER
+      setStringAt(59, str, ER_press);
+
       //SAP
       if (brk_angl > brk_sap_angl) {
-        if (str->length() >= 67) {
-          str->setCharAt(63, '0');
-          str->setCharAt(64, '0');
-          str->setCharAt(65, '0');
-        }
+        setStringAt(63, str, 0);
       }
     }
   }
@@ -1511,4 +1524,17 @@ void set_Settings(uint8_t device, int16_t num) {
       break;
   }
   Serial.println(s);
+}
+
+void setStringAt(uint8_t startIndex, String *str, uint16_t value) {
+  uint16_t d[3];
+  d[0] = value / 100 + 0x30;
+  d[1] = value / 10 % 10 + 0x30;
+  d[2] = value % 10 + 0x30;
+
+  if (str->length() >= 67) {
+    for (int i = 0; i < 3; i++) {
+      str->setCharAt(startIndex + i, char(d[i]));
+    }
+  }
 }
