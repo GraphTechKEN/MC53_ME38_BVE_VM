@@ -16,47 +16,49 @@
 //※AtsEXを導入し、最新プラグインを適用すると上記を自動で調整します。
 
 //更新履歴
-//MC53_ME38_BVE_VM_V2   ブレーキ弁角度と段数を計算で処理するようにした
-//MC53_ME38_BVE_VM_V3   速度計を調整可能にした
-//MC53_ME38_BVE_VM_V3.5 電圧計を電流に応じて動かすようにした
-//MC53_ME38_BVE_VM_V3.6 ブレーキ弁段数を変更できるようにした
-//MC53_ME38_BVE_VM_V3.6.1 電流計を絶対値表示にした、レバーサ不具合修正、ブレーキ角度をPOT_NとPOT_EB間の範囲とした
-//MC53_ME38_BVE_VM_V3.6.2 Arduino Pin9 に ATS復帰(内房線用)　"Homeキー" 追加
-//MC53_ME38_BVE_VM_V3.6.3 他基板連動対応(Serial1送信対応)
-//MC53_ME38_BVE_VM_V3.6.3.2 他基板からキーボードコマンド受付対応、ATS確認をSpacebar(0x20)に変更、Pin6をEBに、チャタリング防止機能テスト
-//MC53_ME38_BVE_VM_V3.6.3.3 速度調整修正、常用最大位置を設定可能とする(デフォルト67°)
-//MC53_ME38_BVE_VM_V3.6.3.4 速度計修正、微修正
-//MC53_ME38_BVE_VM_V3.6.3.5 ブレーキ弁調整モード
-//MC53_ME38_BVE_VM_V3.6.3.8 ブレーキ弁調整モード修正
-//MC53_ME38_BVE_VM_V3.6.3.9 直通帯最小位置を設定可能とする(デフォルト3°)
-//MC53_ME38_BVE_VM_V3.7 簡易自動帯再現
-//MC53_ME38_BVE_VM_V4.0.0.0 コマンド番号化
-//MC53_ME38_BVE_VM_V4.1.0.0 自動帯を追加
-//MC53_ME38_BVE_VM_V4.1.0.1 速度計調整時速度計が動かないバグ修正
-//MC53_ME38_BVE_VM_V4.1.0.2 BPの増減圧インターバルを追加
-//MC53_ME38_BVE_VM_V4.1.0.3 自動帯の使用可否の選択機能を追加
-//MC53_ME38_BVE_VM_V4.1.0.4 自動帯有効時、電制を無効とする
-//MC53_ME38_BVE_VM_V4.1.0.5 自動帯有効時、レバーサをNとする
-//MC53_ME38_BVE_VM_V4.1.0.6 自動帯有効時、マスコンノッチ投入でF/B対応、NでレバーサNとする
-//MC53_ME38_BVE_VM_V4.1.0.7 個別読出追加、微修正、最大ノッチ指定追加
-//MC53_ME38_BVE_VM_V4.1.0.8 最大ノッチ条件判定微修正
-//MC53_ME38_BVE_VM_V4.1.0.9 EEPROM書き込み関数修正(int→uint16_t)、ATS_ConfとATS_Contを反転機能追加、
-//MC53_ME38_BVE_VM_V4.1.0.10 小修正、他基板対応修正
-//MC53_ME38_BVE_VM_V4.1.1.0 自動ブレーキ基板対応 ATS警報持続、確認ボタン基板転送対応
-//MC53_ME38_BVE_VM_V4.1.1.3 自動ノッチ合わせ機構対応
-//MC53_ME38_BVE_VM_V4.1.1.5 速度計補正配列化
-//MC53_ME38_BVE_VM_V4.1.1.6 速度計補正最適化
-//MC53_ME38_BVE_VM_V4.1.1.7 ブレーキノッチ逆転
-//MC53_ME38_BVE_VM_V4.1.1.8_simple MCP3008とMCP4725を使用しない定義を追加
-//MC53_ME38_BVE_VM_V4.1.1.9 微修正
-//MC53_ME38_BVE_VM_V4.1.2.1 警報持続スイッチ反転を他スイッチに拡張(ATS確認を除く)、抑速-非常接点切替対応、ME38自動帯非常抜取対応
-//MC53_ME38_BVE_VM_V4.1.2.2 実際のエアー圧使用時にもME38非常抜取対応
-//MC53_ME38_BVE_VM_V4.1.2.3 非常ラッチ(EB_latch)解除位置が常用最大手前だったものを修正
-//MC53_ME38_BVE_VM_V4.1.2.4 EBスイッチとATS復帰が反転していたので修正
-//MC53_ME38_BVE_VM_V4.1.2.5 POT_NとPOT_EBの上限修正
-//MC53_ME38_BVE_VM_V4.2.0.1 下位に自動帯情報を伝達、抑速ノッチを廃止(マスコンノッチに統合)
-//MC53_ME38_BVE_VM_V4.2.0.2 ツリアイ管(ER)を追加
-//MC53_ME38_BVE_VM_V4.2.0.3 圧力計の針の動きをソフトにする
+//V2   ブレーキ弁角度と段数を計算で処理するようにした
+//V3   速度計を調整可能にした
+//V3.5 電圧計を電流に応じて動かすようにした
+//V3.6 ブレーキ弁段数を変更できるようにした
+//V3.6.1 電流計を絶対値表示にした、レバーサ不具合修正、ブレーキ角度をPOT_NとPOT_EB間の範囲とした
+//V3.6.2 Arduino Pin9 に ATS復帰(内房線用)　"Homeキー" 追加
+//V3.6.3 他基板連動対応(Serial1送信対応)
+//V3.6.3.2 他基板からキーボードコマンド受付対応、ATS確認をSpacebar(0x20)に変更、Pin6をEBに、チャタリング防止機能テスト
+//V3.6.3.3 速度調整修正、常用最大位置を設定可能とする(デフォルト67°)
+//V3.6.3.4 速度計修正、微修正
+//V3.6.3.5 ブレーキ弁調整モード
+//V3.6.3.8 ブレーキ弁調整モード修正
+//V3.6.3.9 直通帯最小位置を設定可能とする(デフォルト3°)
+//V3.7 簡易自動帯再現
+//V4.0.0.0 コマンド番号化
+//V4.1.0.0 自動帯を追加
+//V4.1.0.1 速度計調整時速度計が動かないバグ修正
+//V4.1.0.2 BPの増減圧インターバルを追加
+//V4.1.0.3 自動帯の使用可否の選択機能を追加
+//V4.1.0.4 自動帯有効時、電制を無効とする
+//V4.1.0.5 自動帯有効時、レバーサをNとする
+//V4.1.0.6 自動帯有効時、マスコンノッチ投入でF/B対応、NでレバーサNとする
+//V4.1.0.7 個別読出追加、微修正、最大ノッチ指定追加
+//V4.1.0.8 最大ノッチ条件判定微修正
+//V4.1.0.9 EEPROM書き込み関数修正(int→uint16_t)、ATS_ConfとATS_Contを反転機能追加、
+//V4.1.0.10 小修正、他基板対応修正
+//V4.1.1.0 自動ブレーキ基板対応 ATS警報持続、確認ボタン基板転送対応
+//V4.1.1.3 自動ノッチ合わせ機構対応
+//V4.1.1.5 速度計補正配列化
+//V4.1.1.6 速度計補正最適化
+//V4.1.1.7 ブレーキノッチ逆転
+//V4.1.1.8_simple MCP3008とMCP4725を使用しない定義を追加
+//V4.1.1.9 微修正
+//V4.1.2.1 警報持続スイッチ反転を他スイッチに拡張(ATS確認を除く)、抑速-非常接点切替対応、ME38自動帯非常抜取対応
+//V4.1.2.2 実際のエアー圧使用時にもME38非常抜取対応
+//V4.1.2.3 非常ラッチ(EB_latch)解除位置が常用最大手前だったものを修正
+//V4.1.2.4 EBスイッチとATS復帰が反転していたので修正
+//V4.1.2.5 POT_NとPOT_EBの上限修正
+//V4.2.0.1 下位に自動帯情報を伝達、抑速ノッチを廃止(マスコンノッチに統合)
+//V4.2.0.2 ツリアイ管(ER)を追加
+//V4.2.0.3 圧力計の針の動きをソフトにする
+//V4.2.0.4 自動帯から直通帯に動かした時の針の動きを滑らかにする
+//V4.2.0.5 自動帯で直通ランプを消灯させる
 
 /*input_flip
   1bit:警報持続
@@ -125,6 +127,7 @@ int8_t notch_mc = 0;               //マスコンノッチ
 String notch_name = "";            //マスコンノッチ名称
 uint8_t notch_brk = 0;             //ブレーキノッチ
 uint8_t notch_brk_latch = 0;       //ブレーキノッチ格納 ※自動ノッチ合わせ機構でも使用するためグローバル変数
+uint8_t sap_notch_brk = 0;         //ブレーキノッチ(直通帯)
 String notch_brk_name = "";        //ブレーキノッチ名称
 String notch_brk_name_latch = "";  //ブレーキノッチ名称格納
 //以下ブレーキ設定値
@@ -648,6 +651,7 @@ uint16_t read_Break(String *str) {
     if (brk_angl <= brk_sap_min_angl) {
       //notch_brk = notch_brk_num + 1;
       notch_brk = 0;
+      sap_notch_brk = 0;
       notch_brk_name = "N ";
       autoair_dir_mask = false;
 
@@ -655,7 +659,7 @@ uint16_t read_Break(String *str) {
     } else if (brk_angl < brk_sap_max_angl) {
       uint16_t temp_notch_brk = round((float)(brk_angl - brk_sap_min_angl) / (float)(brk_sap_max_angl - brk_sap_min_angl) * (notch_brk_num - 1) + 0.5);
       notch_brk = temp_notch_brk;
-
+      sap_notch_brk = notch_brk;
       String s = String(temp_notch_brk);
       notch_brk_name = "B" + s;
       autoair_dir_mask = false;
@@ -663,6 +667,7 @@ uint16_t read_Break(String *str) {
       //常用最大位置～直通帯範囲まで
     } else if (brk_angl < brk_sap_angl) {
       notch_brk = notch_brk_num;
+      sap_notch_brk = notch_brk_num;
       notch_brk_name = "B" + String(notch_brk_num);
       autoair_dir_mask = false;
       EB_latch = false;
@@ -1384,19 +1389,23 @@ void read_USB(String *str) {
 }
 
 void send_Serial1(String *str) {
-  //自動帯有効時、電制を無効とする
+  //自動帯有効時、直通ランプと電制を無効とする
   if (autoair_use) {
     if (brk_angl > brk_sap_angl) {
       if (str->length() > 18) {
-        str->setCharAt(18, '0');
+        str->setCharAt(17, '0');  //直通ランプ
+        str->setCharAt(18, '0');  //電制ランプ
       }
     }
     //自動帯シミュレーション時、BC、BP、SAPを転送する
     if (!RealAutoAir) {
+      static bool sap_auto_mask = false;
       //"0000/1/ 00000/100000/0000000000000000000001/NN0B08M780C440E490S440P490/";
       //BC
       if (bve_BC_press > BC_press) {
-        BC_press = bve_BC_press;
+        if (!sap_auto_mask) {
+          BC_press = bve_BC_press;
+        }
       }
       setStringAt(55, str, BC_press);
       //BP
@@ -1417,11 +1426,19 @@ void send_Serial1(String *str) {
           }
         }
         if (!sap_latch) {
-          sap_press_latch = bve_SAP_press;
+          if (!sap_auto_mask) {
+            sap_press_latch = bve_SAP_press;
+          } else {
+            uint16_t tmp_sap_press = map(sap_notch_brk, 0, notch_brk_num, 0, 440);
+            if (tmp_sap_press > BC_press) {
+              sap_auto_mask = false;
+            }
+          }
         }
       }
       if (brk_angl > brk_sap_angl) {
         sap_latch = true;
+        static bool sap_auto_mask = true;
         if (millis() - sap_millis > 20) {
           if (sap_press_latch >= 5) {
             sap_press_latch -= 5;
