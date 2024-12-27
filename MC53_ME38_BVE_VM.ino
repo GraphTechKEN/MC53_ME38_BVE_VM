@@ -59,6 +59,7 @@
 //V4.2.0.3 圧力計の針の動きをソフトにする
 //V4.2.0.4 自動帯から直通帯に動かした時の針の動きを滑らかにする
 //V4.2.0.5 自動帯で直通ランプを消灯させる
+//V4.2.0.6 N位置で自動ブレーキ作動時は直通ランプを消灯、直通帯で自動ブレーキ作動時は直通ランプを点灯させる
 
 /*input_flip
   1bit:警報持続
@@ -1270,12 +1271,14 @@ void BP(uint8_t *angl, String *str) {
     //自動ブレーキ
     if (autoair_notch_brk >= 0) {  //自動ブレーキ帯の段数が(N位置より)高いとき
       notch_brk = autoair_notch_brk;
+      str->setCharAt(17, '0');  //直通ランプ消灯
     }
     //直通帯位置
   } else if (*angl < brk_sap_angl) {
     //自動ブレーキ
     if (notch_brk < autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
       notch_brk = autoair_notch_brk;
+      str->setCharAt(17, '1');  //直通ランプ点灯
     }
 
     //自動帯
