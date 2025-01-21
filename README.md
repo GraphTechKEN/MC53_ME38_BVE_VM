@@ -23,6 +23,8 @@
    コネクタ類も参考です。直接配線しても問題はありません。
 5. AE-MCP4725の基板裏面はSDAとSCLのプルアップのみハンダでジャンパー接続します。A0はピンに配線しています。(ジャンパーを忘れると正常動作しません)
 6. Arduino IDEには、Adafruit MCP23017 Arduino Library と Adafruit_MCP4725 Arduino Library を導入してください。
+7. ArduinoとMCP4725モジュールにはロングピンソケット(分割ロングピンソケット42P推奨)、MCP3008とMCP23S17にはそれぞれICソケットを用いると、万が一の歳の交換がしやすくなります。
+8. 接続コネクタはDF1Bで記載していますが、2.54mmピッチであれば何でも構いません。他にはXHコネクタ(ベース付きポストサイド型)があります。シンプルなピンヘッダ(オスL型)でも接続出来れば良いですが、配線抜けがリスクです。
    ![実態配線図](https://github.com/GraphTechKEN/MC53_ME38_BVE_VM/blob/main/ME38_MC53_Pedal_SWBox_DG_VM_V4.1.1.9.png)
 
 > [!WARNING]
