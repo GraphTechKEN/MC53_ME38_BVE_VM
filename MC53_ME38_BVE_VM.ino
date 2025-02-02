@@ -60,6 +60,8 @@
 //V4.2.0.4 自動帯から直通帯に動かした時の針の動きを滑らかにする
 //V4.2.0.5 自動帯で直通ランプを消灯させる
 //V4.2.0.6 N位置で自動ブレーキ作動時は直通ランプを消灯、直通帯で自動ブレーキ作動時は直通ランプを点灯させる
+//V4.2.0.7 調整モード(模型運転モード)でノッチオフをP0、緩解をB0、自動ブレーキ時のレバーサ切替を無効とする
+//V4.2.1.1 BveEX起動時、自動帯をB0とし、下位からのBC圧を伝達する
 
 /*input_flip
   1bit:警報持続
@@ -191,7 +193,7 @@ uint8_t autoair_notch_brk = 0;
 uint8_t autoair_notch_brk_latch = 0;
 uint16_t bp_span_down = 20;      //064 自動帯減圧インターバル
 uint16_t bp_span_up = 20;        //066 自動帯増圧インターバル
-uint16_t autoair_use = true;     //068自動帯使用可否
+uint16_t autoair_use = 1;        //068 自動帯使用可否 0bit:使用可否 bit1:AutoAirEX //V4.2.1.1変更
 bool autoair_dir_mask = false;   //自動帯使用時方向切替をマスク
 uint16_t BC_press = 0;           //自動帯他基板より入力された値を格納
 uint16_t bve_BC_press = 0;       //USBより入力されたBC値を格納
@@ -320,6 +322,9 @@ void loop() {
   static String strbve = "0000/1/ 00000/100000/0000000000000000000001/NN0B08M780C440F490S440P490/";
   static String strbve_latch = "";
   static int16_t bve_current = 0;
+  static uint16_t BC_press_latch = BC_press;
+  static uint16_t BP_press_latch = BP_press;
+  static uint16_t ER_press_latch = ER_press;
   read_Serial1();
   read_USB(&strbve);
 
@@ -441,11 +446,15 @@ void loop() {
   read_EB();             //EBスイッチ読込ルーチン
   keyboard_control();    //キーボード(HID)アウトプットルーチン
 
-  static uint16_t BC_press_latch = BC_press;
-  static uint16_t BP_press_latch = BP_press;
-  static uint16_t ER_press_latch = ER_press;
   if (BC_press != BC_press_latch || BP_press != BP_press_latch || ER_press != ER_press_latch) {
     send_Serial1(&strbve);
+    //V4.2.1.1追加
+    if ((autoair_use & 1) && !RealAutoAir) {
+      //if (BC_press != BC_press_latch) {
+      Serial.print("BC ");
+      Serial.println(BC_press);
+      //}
+    }
     BC_press_latch = BC_press;
     BP_press_latch = BP_press;
     ER_press_latch = ER_press;
@@ -545,11 +554,13 @@ void read_MC(void) {
         autoair_dir_mask = false;
       } else {
         notch_mc = 0;
-        notch_name = "N ";
-        if (brk_angl > brk_sap_angl && brk_angl < brk_eb_angl && autoair_use) {
-          autoair_dir_mask = true;
-          iDir = 0;
-          cDir[0] = 'N';
+        notch_name = "P0";
+        //マスコンノッチが0でブレーキが自動帯にあるときはレバーサ0、レバーサマスクをtrue、ただしBveEXモード時を除く
+        if (brk_angl > brk_sap_angl && brk_angl < brk_eb_angl && autoair_use & 1 && !(autoair_use >> 2 & 1)) {
+          if (!modeN) {
+            autoair_dir_mask = true;
+            iDir = 0;
+          }
         }
       }
     } else {
@@ -650,10 +661,9 @@ uint16_t read_Break(String *str) {
   if (abs(brk_angl - brk_angl_latch) >= chat_filter) {
     //N位置
     if (brk_angl <= brk_sap_min_angl) {
-      //notch_brk = notch_brk_num + 1;
       notch_brk = 0;
       sap_notch_brk = 0;
-      notch_brk_name = "N ";
+      notch_brk_name = "B0";
       autoair_dir_mask = false;
 
       //直通帯位置(※常用最大位置まで)
@@ -675,14 +685,16 @@ uint16_t read_Break(String *str) {
 
       //自動帯
     } else if (brk_angl < brk_keep_angl) {
-      if (autoair_use) {
-        //notch_brk = notch_brk_num + 1;
+      if (autoair_use & 1) {
         notch_brk = 0;
-        notch_brk_name = "N ";
+        notch_brk_name = "B0";
+        //ブレーキ弁が自動帯にあり、マスコンノッチが0のときレバーサ0、レバーサマスクをtrueに、ただし模型モード以外またはBveEXモード以外のときを除く
         if (notch_mc == 0) {
-          autoair_dir_mask = true;
-          iDir = 0;
-          cDir[0] = 'N';
+          if (!modeN && !(autoair_use >> 2 & 1)) {
+            autoair_dir_mask = true;
+            iDir = 0;
+          }
+          //マスコンノッチが0以外の時はレバーサマスクをfalse
         } else {
           autoair_dir_mask = false;
         }
@@ -694,14 +706,17 @@ uint16_t read_Break(String *str) {
         autoair_dir_mask = false;
       }
 
+      //自動帯減圧位置(弱)
     } else if (brk_angl < brk_keep_full_angl) {
-      if (autoair_use) {
+      if (autoair_use & 1) {
         notch_brk_name = "A1";
+        //ブレーキ弁が自動帯にあり、マスコンノッチが0のときレバーサ0、レバーサマスクをtrueに、ただし模型モード以外またはBveEXモード以外のときを除く
         if (notch_mc == 0) {
-          autoair_dir_mask = true;
-          iDir = 0;
-          //strDir = "N ";
-          cDir[0] = 'N';
+          if (!modeN && !(autoair_use >> 2 & 1)) {
+            autoair_dir_mask = true;
+            iDir = 0;
+          }
+          //マスコンノッチが0以外の時はレバーサマスクをfalse
         } else {
           autoair_dir_mask = false;
         }
@@ -711,15 +726,17 @@ uint16_t read_Break(String *str) {
         notch_brk_name = "B" + String(notch_brk_num);
         autoair_dir_mask = false;
       }
-
+      //自動帯減圧位置(強)
     } else if (brk_angl < brk_eb_angl) {
-      if (autoair_use) {
+      if (autoair_use & 1) {
         notch_brk_name = "A2";
+        //ブレーキ弁が自動帯にあり、マスコンノッチが0のときレバーサ0、レバーサマスクをtrueに、ただし模型モード以外またはBveEXモード以外のときを除く
         if (notch_mc == 0) {
-          autoair_dir_mask = true;
-          iDir = 0;
-          //strDir = "N ";
-          cDir[0] = 'N';
+          if (!modeN && !(autoair_use >> 2 & 1)) {
+            autoair_dir_mask = true;
+            iDir = 0;
+          }
+          //マスコンノッチが0以外の時はレバーサマスクをfalse
         } else {
           autoair_dir_mask = false;
         }
@@ -741,7 +758,7 @@ uint16_t read_Break(String *str) {
     brk_angl_latch = brk_angl;
   }
 
-  if (autoair_use) {
+  if (autoair_use & 1) {
     BP(&brk_angl, str);
   }
 
@@ -768,7 +785,7 @@ uint16_t read_Break(String *str) {
 
 //キーボード(HID)出力
 void keyboard_control(void) {
-  //マスコンノッ.チが前回と異なるとき
+  //マスコンノッチが前回と異なるとき
   static int8_t notch_mc_latch = notch_mc;
   if (notch_mc != notch_mc_latch) {
     if (modeBVE) {
@@ -863,7 +880,7 @@ void keyboard_control(void) {
 
   //レバーサが前回と異なるとき
   if (iDir != iDir_latch) {
-    if (modeBVE) {
+    if (modeBVE && !modeN) {
       uint8_t d = abs(iDir - iDir_latch);
       for (uint8_t i = 0; i < d; i++) {
         //前進
@@ -1244,7 +1261,7 @@ void BP(uint8_t *angl, String *str) {
     }
 
     //自動帯でのBC圧をBP圧より生成
-    BC_press = (490 - BP_press) * 2.5;
+    BC_press = (490 - BP_press) * 3.3;
     //非常吐出なく、自動帯常用でBC圧力が440kPa以上のとき440kPaとする
     if (BC_press > 440) {
       if (*angl < brk_eb_angl && !EB_latch) {
@@ -1259,32 +1276,37 @@ void BP(uint8_t *angl, String *str) {
     }
   }
 
-  //BC圧からブレーキノッチに変換
-  if (EB_latch) {
-    autoair_notch_brk = notch_brk_num + 1;
-  } else {
-    autoair_notch_brk = map(BC_press, 0, 440, 0, notch_brk_num);
-  }
-  //自動帯圧力優先シーケンス
-  //N位置
-  if (*angl <= brk_sap_min_angl) {
-    //自動ブレーキ
-    if (autoair_notch_brk >= 0) {  //自動ブレーキ帯の段数が(N位置より)高いとき
-      notch_brk = autoair_notch_brk;
-      str->setCharAt(17, '0');  //直通ランプ消灯
-    }
-    //直通帯位置
-  } else if (*angl < brk_sap_angl) {
-    //自動ブレーキ
-    if (notch_brk < autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
-      notch_brk = autoair_notch_brk;
-      str->setCharAt(17, '1');  //直通ランプ点灯
-    }
 
-    //自動帯
-  } else if (*angl < brk_eb_angl) {       //自動ブレーキ
-    if (notch_brk < autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
-      notch_brk = autoair_notch_brk;
+  //AutoAirEXを使用しない場合、ノッチを圧力に応じて変換
+  //AutoAirEXを使用する場合、ノッチはB0固定
+  if (!(autoair_use >> 2 & 1)) {
+    //BC圧からブレーキノッチに変換
+    if (EB_latch) {
+      autoair_notch_brk = notch_brk_num + 1;
+    } else {
+      autoair_notch_brk = map(BC_press, 0, 440, 0, notch_brk_num);
+    }
+    //自動帯圧力優先シーケンス
+    //N位置
+    if (*angl <= brk_sap_min_angl) {
+      //自動ブレーキ
+      if (autoair_notch_brk >= 0) {  //自動ブレーキ帯の段数が(N位置より)高いとき
+        notch_brk = autoair_notch_brk;
+        str->setCharAt(17, '0');  //直通ランプ消灯
+      }
+      //直通帯位置
+    } else if (*angl < brk_sap_angl) {
+      //自動ブレーキ
+      if (notch_brk < autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
+        notch_brk = autoair_notch_brk;
+        str->setCharAt(17, '1');  //直通ランプ点灯
+      }
+
+      //自動帯
+    } else if (*angl < brk_eb_angl) {       //自動ブレーキ
+      if (notch_brk < autoair_notch_brk) {  //自動ブレーキ帯の段数が高いとき
+        notch_brk = autoair_notch_brk;
+      }
     }
   }
 }
@@ -1377,8 +1399,14 @@ void disp_CurrentMeter(int16_t current) {
 void read_Serial1() {
   if (Serial1.available() > 0) {
     String str1 = Serial1.readStringUntil('\r');
-    if (str1.startsWith("BC ") && RealAutoAir) {
-      BC_press = str1.substring(3, 6).toInt();
+    //実際のエアーを使用する場合はBC_pressにSerial1から圧力値を格納
+    if (str1.startsWith("BC ")) {
+      if (autoair_use & 1) {
+        if (RealAutoAir) {
+          BC_press = str1.substring(3, 6).toInt();
+          Serial.println(str1);
+        }
+      }
     } else {
       Serial.println(str1);
     }
@@ -1393,7 +1421,7 @@ void read_USB(String *str) {
 
 void send_Serial1(String *str) {
   //自動帯有効時、直通ランプと電制を無効とする
-  if (autoair_use) {
+  if (autoair_use & 1) {
     if (brk_angl > brk_sap_angl) {
       if (str->length() > 18) {
         str->setCharAt(17, '0');  //直通ランプ
@@ -1404,13 +1432,15 @@ void send_Serial1(String *str) {
     if (!RealAutoAir) {
       static bool sap_auto_mask = false;
       //"0000/1/ 00000/100000/0000000000000000000001/NN0B08M780C440E490S440P490/";
-      //BC
+
+      //現在BC圧よりもBVEからのBC圧が高い場合はBVEを優先する、ただしBveEXモード時ではない場合
       if (bve_BC_press > BC_press) {
-        if (!sap_auto_mask) {
+        if (!sap_auto_mask && !(autoair_use >> 2 & 1)) {
           BC_press = bve_BC_press;
         }
       }
       setStringAt(55, str, BC_press);
+
       //BP
       setStringAt(67, str, BP_press);
       //ER
@@ -1552,7 +1582,7 @@ void set_Settings(uint8_t device, int16_t num) {
       s = rw_eeprom(device, &num, &bp_span_up, true, num == 0 || num > 100);
       break;
     case 68:  //自動帯使用可否
-      s = rw_eeprom(device, &num, &autoair_use, true, num < 0 || num > 1);
+      s = rw_eeprom(device, &num, &autoair_use, true, num < 0 || num > 255);
       break;
     case 70:  //マスコンノッチ最大数
       s = rw_eeprom(device, &num, &notch_mc_num_max, true, num < 0);
