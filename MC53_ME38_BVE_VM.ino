@@ -62,6 +62,7 @@
 //V4.2.0.6 N位置で自動ブレーキ作動時は直通ランプを消灯、直通帯で自動ブレーキ作動時は直通ランプを点灯させる
 //V4.2.0.7 調整モード(模型運転モード)でノッチオフをP0、緩解をB0、自動ブレーキ時のレバーサ切替を無効とする
 //V4.2.1.1 BveEX起動時、自動帯をB0とし、下位からのBC圧を伝達する
+//V4.2.1.2 BveEX起動時、B0位置で直通ランプが点灯しない不具合修正
 
 /*input_flip
   1bit:警報持続
@@ -1292,7 +1293,10 @@ void BP(uint8_t *angl, String *str) {
       //自動ブレーキ
       if (autoair_notch_brk >= 0) {  //自動ブレーキ帯の段数が(N位置より)高いとき
         notch_brk = autoair_notch_brk;
-        str->setCharAt(17, '0');  //直通ランプ消灯
+        //直通ランプ消灯、ただしBveEX使用時を除く V4.2.1.2
+        if (!(autoair_use >> 2 & 1)) {
+          str->setCharAt(17, '0');  
+        }
       }
       //直通帯位置
     } else if (*angl < brk_sap_angl) {
@@ -1420,16 +1424,16 @@ void read_USB(String *str) {
 }
 
 void send_Serial1(String *str) {
-  //自動帯有効時、直通ランプと電制を無効とする
   if (autoair_use & 1) {
+    //自動帯有効時、直通ランプと電制を無効とする
     if (brk_angl > brk_sap_angl) {
       if (str->length() > 18) {
         str->setCharAt(17, '0');  //直通ランプ
         str->setCharAt(18, '0');  //電制ランプ
       }
     }
-    //自動帯シミュレーション時、BC、BP、SAPを転送する
-    if (!RealAutoAir) {
+    //自動帯シミュレーション時、BC、BP、SAPを転送する、ただし直接転送モード時以外
+    if (!RealAutoAir && !(autoair_use >> 3 & 1)) {
       static bool sap_auto_mask = false;
       //"0000/1/ 00000/100000/0000000000000000000001/NN0B08M780C440E490S440P490/";
 
