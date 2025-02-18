@@ -44,7 +44,8 @@
 >- 331e線が実車ではGndですが、その配線ですと力行しない限りレバーサの前進(4線)と後進(5線)が判別できないため、331h線をGndとし、331e線を1段目に付け替えています。
 
 ## BVEとの連動方法
-> [こちら](https://github.com/GraphTechKEN/SerialOutputEx)のSerialOutputExを参照してください。
+> 専用プラグイン化しました(SeldEX)。SeldEx.XXXX.zipの識別子を削除後展開し、BveExフォルダを、ユーザー->パブリック->パブリックのドキュメントへそのままコピーします。
+> 詳細は[こちら](https://github.com/GraphTechKEN/SerialOutputEx)のSerialOutputExを参照してください。SerialOutputExのDLと導入は不要です。
 
 ## 謝辞
 本開発品はツナギ図 laboratory(ED67900-5様代表ほか)の出版冊子[実物部品を使った運転シミュレータのつくりかた | ](https://booth.pm/ja/items/1756291)を参考にしております。  
